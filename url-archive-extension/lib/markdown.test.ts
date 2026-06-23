@@ -44,12 +44,22 @@ describe('slugify', () => {
   test('保留中英文数字，其余转连字符', () => {
     expect(slugify('Hello World! 动画库')).toBe('hello-world-动画库');
   });
+
+  test('纯符号返回空串', () => {
+    expect(slugify('!!!')).toBe('');
+  });
 });
 
 describe('generateFilename', () => {
   test('格式为 domain-slug-日期.md', () => {
     expect(generateFilename(baseNote)).toBe(
       'example.com-一篇关于动画库的文章-2026-06-23.md',
+    );
+  });
+
+  test('空标题回退到 untitled', () => {
+    expect(generateFilename({ ...baseNote, title: '' })).toBe(
+      'example.com-untitled-2026-06-23.md',
     );
   });
 });

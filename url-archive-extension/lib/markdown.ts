@@ -11,7 +11,8 @@ export function slugify(input: string): string {
 
 export function generateFilename(note: ClippedNote): string {
   const date = note.clipped.slice(0, 10);  // YYYY-MM-DD
-  return `${note.domain}-${slugify(note.title)}-${date}.md`;
+  const slug = slugify(note.title) || 'untitled';  // 空/纯符号标题回退
+  return `${note.domain}-${slug}-${date}.md`;
 }
 
 export function serializeNote(note: ClippedNote): string {
