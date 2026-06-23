@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head><meta charset="UTF-8" /><title>URL Archive 设置</title></head>
+  <body style="font-family: system-ui, sans-serif; max-width: 480px; margin: 24px auto;">
+    <h2>URL Archive 设置</h2>
+    <fieldset>
+      <legend>AI（BYOK）</legend>
+      <label>API 端点 <input id="llmBaseUrl" style="width:100%" /></label>
+      <label>API Key <input id="llmApiKey" type="password" style="width:100%" /></label>
+      <label>模型 <input id="llmModel" style="width:100%" /></label>
+    </fieldset>
+    <fieldset>
+      <legend>Obsidian Local REST API</legend>
+      <label>地址 <input id="restApiUrl" style="width:100%" /></label>
+      <label>Token <input id="restApiToken" type="password" style="width:100%" /></label>
+      <label>vault 文件夹 <input id="vaultFolder" style="width:100%" /></label>
+    </fieldset>
+    <button id="save">保存</button>
+    <span id="saved"></span>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
