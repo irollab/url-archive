@@ -1,24 +1,20 @@
-import './style.css';
-import typescriptLogo from '@/assets/typescript.svg';
-import wxtLogo from '/wxt.svg';
-import { setupCounter } from '@/components/counter';
+const whyEl = document.getElementById('why') as HTMLTextAreaElement;
+const btn = document.getElementById('clip') as HTMLButtonElement;
+const statusEl = document.getElementById('status') as HTMLParagraphElement;
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-  <div>
-    <a href="https://wxt.dev" target="_blank">
-      <img src="${wxtLogo}" class="logo" alt="WXT logo" />
-    </a>
-    <a href="https://www.typescriptlang.org/" target="_blank">
-      <img src="${typescriptLogo}" class="logo vanilla" alt="TypeScript logo" />
-    </a>
-    <h1>WXT + TypeScript</h1>
-    <div class="card">
-      <button id="counter" type="button"></button>
-    </div>
-    <p class="read-the-docs">
-      Click on the WXT and TypeScript logos to learn more
-    </p>
-  </div>
-`;
+whyEl.focus();
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!);
+btn.addEventListener('click', async () => {
+  btn.disabled = true;
+  statusEl.textContent = '剪藏中…';
+  const res = await chrome.runtime.sendMessage({ type: 'CAPTURE', why: whyEl.value });
+  if (res?.ok && res.written) {
+    statusEl.textContent = '✓ 已剪藏到 Obsidian';
+    setTimeout(() => window.close(), 800);
+  } else if (res?.ok && !res.written) {
+    statusEl.textContent = '✓ 已暂存（Obsidian 不可用，恢复后自动写入）';
+  } else {
+    statusEl.textContent = `✗ 失败：${res?.error ?? '未知错误'}`;
+    btn.disabled = false;
+  }
+});
