@@ -77,9 +77,9 @@ const DEFAULT_PREFS: Prefs = {
 
 let prefs: Prefs = DEFAULT_PREFS;
 let dashboardData: DashboardData | null = null;
-let query = '';
 let currentFolder = '';
 let searchTimer: number | undefined;
+let dashboardRequestSeq = 0;
 
 init();
 
@@ -105,22 +105,30 @@ async function loadPrefs() {
 }
 
 async function refreshDashboard() {
+  const requestId = ++dashboardRequestSeq;
+  const query = searchInputEl.value;
+  const folder = currentFolder;
+
   setStatus('正在加载收藏数据...');
   try {
     const res = await chrome.runtime.sendMessage({
       type: 'GET_DASHBOARD_DATA',
       query,
-      folder: currentFolder,
+      folder,
     }) as RuntimeResponse<{ data?: DashboardData }>;
+
+    if (requestId !== dashboardRequestSeq) return;
 
     if (!res?.ok || !res.data) {
       throw new Error(res?.error ?? '无法读取收藏数据');
     }
 
     dashboardData = res.data;
-    renderDashboard(res.data);
-    setStatus(statusText(res.data));
+    renderDashboard(res.data, query, folder);
+    setStatus(statusText(res.data, query, folder));
   } catch (error) {
+    if (requestId !== dashboardRequestSeq) return;
+
     dashboardData = null;
     categoryListEl.innerHTML = '';
     cardsEl.innerHTML = '<div class="card-meta">收藏数据加载失败</div>';
@@ -130,19 +138,19 @@ async function refreshDashboard() {
   }
 }
 
-function renderDashboard(data: DashboardData) {
-  renderCategories(data);
-  renderCards(data.cards);
+function renderDashboard(data: DashboardData, query: string, folder: string) {
+  renderCategories(data, folder);
+  renderCards(data.cards, query);
   renderRightPanel(data);
 }
 
-function renderCategories(data: DashboardData) {
+function renderCategories(data: DashboardData, folder: string) {
   const topLevelFolders = getTopLevelFolders(data.folders);
   const totalCount = data.stats.total;
 
-  const allButton = categoryButtonHtml('全部收藏', totalCount, '', currentFolder === '');
+  const allButton = categoryButtonHtml('全部收藏', totalCount, '', folder === '');
   const folderButtons = topLevelFolders
-    .map((folder) => categoryButtonHtml(folder.name, folder.count, folder.path, currentFolder === folder.path))
+    .map((item) => categoryButtonHtml(item.name, item.count, item.path, folder === item.path))
     .join('');
 
   categoryListEl.innerHTML = allButton + folderButtons;
@@ -155,7 +163,7 @@ function renderCategories(data: DashboardData) {
   }
 }
 
-function renderCards(cards: DashboardCard[]) {
+function renderCards(cards: DashboardCard[], query: string) {
   if (!cards.length) {
     cardsEl.innerHTML = `<article class="bookmark-card"><div class="card-title">没有匹配的收藏</div><div class="card-meta">${query ? '换个关键词试试' : '导入或剪藏后会显示在这里'}</div></article>`;
     return;
@@ -201,7 +209,6 @@ function renderRightPanel(data: DashboardData) {
 
 function bindEvents() {
   searchInputEl.addEventListener('input', () => {
-    query = searchInputEl.value.trim();
     window.clearTimeout(searchTimer);
     searchTimer = window.setTimeout(() => {
       refreshDashboard();
@@ -284,14 +291,15 @@ function normalizePrefs(value: Partial<Prefs>): Prefs {
   };
 }
 
-function statusText(data: DashboardData): string {
+function statusText(data: DashboardData, query: string, folder: string): string {
   const parts = [
     `${data.stats.total} 条收藏`,
     `${data.stats.clips} 条剪藏`,
     `${data.stats.bookmarks} 个书签`,
   ];
-  if (query) parts.push(`搜索：${query}`);
-  if (currentFolder) parts.push(`分类：${currentFolder}`);
+  const trimmedQuery = query.trim();
+  if (trimmedQuery) parts.push(`搜索：${trimmedQuery}`);
+  if (folder) parts.push(`分类：${folder}`);
   return parts.join(' · ');
 }
 
