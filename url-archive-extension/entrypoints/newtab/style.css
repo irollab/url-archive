@@ -47,8 +47,8 @@ body { margin: 0; font-family: system-ui, sans-serif; color: #17212f; background
   .topbar { grid-template-columns: 1fr; padding: 14px; align-items: stretch; }
   .toolbar { justify-content: flex-start; }
   .layout { grid-template-columns: 210px minmax(0, 1fr); }
-  .right-panel { display: none; position: fixed; right: 18px; top: 88px; width: 300px; z-index: 3; }
-  .right-panel.open { display: grid; }
+  .right-panel { display: none; }
+  .right-panel.open { display: grid; position: static; grid-column: 1 / -1; width: auto; }
   .drawer-toggle { display: inline-block; }
 }
 @media (max-width: 760px) {
