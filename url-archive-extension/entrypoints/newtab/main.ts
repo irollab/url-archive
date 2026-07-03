@@ -1,5 +1,13 @@
 const appEl = document.getElementById('app') as HTMLElement;
 const statusEl = document.getElementById('status') as HTMLElement;
+const editPanelEl = document.getElementById('editPanel') as HTMLElement;
+const editCloseEl = document.getElementById('editClose') as HTMLButtonElement;
+const editTitleEl = document.getElementById('editTitle') as HTMLInputElement;
+const editFolderEl = document.getElementById('editFolder') as HTMLInputElement;
+const editTagsEl = document.getElementById('editTags') as HTMLInputElement;
+const editWhyEl = document.getElementById('editWhy') as HTMLTextAreaElement;
+const editSaveEl = document.getElementById('editSave') as HTMLButtonElement;
+const editCancelEl = document.getElementById('editCancel') as HTMLButtonElement;
 const searchInputEl = document.getElementById('searchInput') as HTMLInputElement;
 const categoryListEl = document.getElementById('categoryList') as HTMLDivElement;
 const contentTitleEl = document.getElementById('contentTitle') as HTMLDivElement;
@@ -89,6 +97,7 @@ const DEFAULT_PREFS: Prefs = {
 let prefs: Prefs = DEFAULT_PREFS;
 let dashboardData: DashboardData | null = null;
 let currentFolder = '';
+let editingCard: DashboardCard | null = null;
 let searchTimer: number | undefined;
 let dashboardRequestSeq = 0;
 let prefsSaveSeq = 0;
@@ -157,6 +166,52 @@ function renderDashboard(data: DashboardData, query: string, folder: string) {
   renderRightPanel(data);
 }
 
+function openEditPanel(card: DashboardCard) {
+  editingCard = card;
+  editTitleEl.value = card.title || '';
+  editFolderEl.value = card.folder || '';
+  editTagsEl.value = card.tags.join(', ');
+  editWhyEl.value = card.why || '';
+  editPanelEl.hidden = false;
+  editTitleEl.focus();
+}
+
+function closeEditPanel() {
+  editingCard = null;
+  editPanelEl.hidden = true;
+}
+
+async function saveEdit() {
+  if (!editingCard) return;
+
+  editSaveEl.disabled = true;
+  try {
+    const res = await chrome.runtime.sendMessage({
+      type: 'UPDATE_SAVED_CLIP',
+      update: {
+        url: editingCard.url,
+        canonicalUrl: editingCard.canonicalUrl,
+        title: editTitleEl.value,
+        folder: editFolderEl.value,
+        tags: editTagsEl.value.split(/[,，]/),
+        why: editWhyEl.value,
+      },
+    }) as RuntimeResponse<{}>;
+
+    if (res?.ok) {
+      setStatus('已保存收藏信息');
+      closeEditPanel();
+      await refreshDashboard();
+    } else {
+      setStatus(`保存失败：${res?.error ?? '未知错误'}`);
+    }
+  } catch (error) {
+    setStatus(`保存失败：${errorMessage(error)}`);
+  } finally {
+    editSaveEl.disabled = false;
+  }
+}
+
 function renderCategories(data: DashboardData, folder: string) {
   const topLevelFolders = getTopLevelFolders(data.folders);
   const totalCount = data.stats.total;
@@ -183,10 +238,19 @@ function renderCards(cards: DashboardCard[], query: string) {
   }
 
   cardsEl.innerHTML = cards.map(cardHtml).join('');
+  const cardByUrl = new Map(cards.map((card) => [card.url, card]));
 
-  for (const cardEl of cardsEl.querySelectorAll<HTMLElement>('.bookmark-card[data-url]')) {
-    cardEl.addEventListener('click', async () => {
-      const url = cardEl.dataset.url;
+  for (const article of cardsEl.querySelectorAll<HTMLElement>('.bookmark-card[data-url]')) {
+    const card = cardByUrl.get(article.dataset.url || '');
+    article.querySelector('.edit-card')?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (card) openEditPanel(card);
+    });
+
+    article.addEventListener('click', async (event) => {
+      if ((event.target as HTMLElement).closest('.edit-card')) return;
+
+      const url = article.dataset.url;
       if (!url) return;
       await chrome.runtime.sendMessage({ type: 'OPEN_REVISIT', url });
     });
@@ -221,6 +285,10 @@ function renderRightPanel(data: DashboardData) {
 }
 
 function bindEvents() {
+  editSaveEl.addEventListener('click', saveEdit);
+  editCancelEl.addEventListener('click', closeEditPanel);
+  editCloseEl.addEventListener('click', closeEditPanel);
+
   searchInputEl.addEventListener('input', () => {
     window.clearTimeout(searchTimer);
     searchTimer = window.setTimeout(() => {
@@ -351,6 +419,7 @@ function cardHtml(card: DashboardCard): string {
       <div class="card-top">
         ${faviconHtml(card)}
         <span class="source-badge">${escapeHtml(card.sourceLabel)}</span>
+        <button class="edit-card" type="button">编辑</button>
       </div>
       <div>
         <div class="card-title">${escapeHtml(card.title || card.url)}</div>
