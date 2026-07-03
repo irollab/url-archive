@@ -31,6 +31,9 @@ body { margin: 0; font-family: system-ui, sans-serif; color: #17212f; background
 .widget h2 { margin: 0 0 10px; font-size: 14px; }
 .widget-body { color: #667085; font-size: 13px; line-height: 1.5; }
 .wide-action { width: 100%; margin-top: 8px; border: 1px solid #d6dee8; border-radius: 10px; background: #fff; padding: 9px 10px; text-align: left; }
+.empty-state { border: 1px dashed #cbd5e1; border-radius: 12px; padding: 18px; color: #667085; background: #f8fafc; }
+.recent-row { display: grid; gap: 3px; padding: 8px 0; border-bottom: 1px solid #eef2f6; }
+.recent-row:last-child { border-bottom: 0; }
 .edit-panel { position: fixed; right: 22px; bottom: 22px; width: min(420px, calc(100vw - 44px)); background: #fff; border: 1px solid #d6dee8; border-radius: 12px; padding: 14px; box-shadow: 0 20px 45px rgba(15, 23, 42, .18); display: grid; gap: 10px; }
 .edit-panel[hidden] { display: none; }
 .edit-head, .edit-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

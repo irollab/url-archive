@@ -7,8 +7,19 @@ const cardsEl = document.getElementById('cards') as HTMLDivElement;
 const rightPanelEl = document.getElementById('rightPanel') as HTMLElement;
 const revisitWidgetEl = document.getElementById('revisitWidget') as HTMLDivElement;
 const recentWidgetEl = document.getElementById('recentWidget') as HTMLDivElement;
-const densityButtonEls = [...document.querySelectorAll<HTMLButtonElement>('.density-button')];
+const densityButtons = [...document.querySelectorAll<HTMLButtonElement>('.density-button')];
 const themeToggleEl = document.getElementById('themeToggle') as HTMLButtonElement;
+const drawerToggleEl = document.getElementById('rightDrawerToggle') as HTMLButtonElement;
+const clipCurrentEl = document.getElementById('clipCurrent') as HTMLButtonElement;
+const aiRecallEl = document.getElementById('aiRecall') as HTMLButtonElement;
+const importButtons = [
+  document.getElementById('importBookmarks') as HTMLButtonElement,
+  document.getElementById('rightImport') as HTMLButtonElement,
+];
+const settingsButtons = [
+  document.getElementById('openSettings') as HTMLButtonElement,
+  document.getElementById('rightSettings') as HTMLButtonElement,
+];
 
 type Density = 'compact' | 'standard' | 'large';
 type Theme = 'light' | 'dark';
@@ -214,6 +225,47 @@ function bindEvents() {
       refreshDashboard();
     }, 180);
   });
+
+  for (const button of densityButtons) {
+    button.addEventListener('click', () => {
+      const density = button.dataset.density;
+      if (density !== 'compact' && density !== 'standard' && density !== 'large') return;
+      savePrefs({ density });
+    });
+  }
+
+  themeToggleEl.addEventListener('click', () => {
+    savePrefs({ theme: prefs.theme === 'dark' ? 'light' : 'dark' });
+  });
+
+  drawerToggleEl.addEventListener('click', () => {
+    savePrefs({ rightPanelCollapsed: !prefs.rightPanelCollapsed });
+  });
+
+  for (const button of importButtons) {
+    button.addEventListener('click', () => {
+      importBookmarks();
+    });
+  }
+
+  for (const button of settingsButtons) {
+    button.addEventListener('click', () => {
+      chrome.runtime.openOptionsPage();
+    });
+  }
+
+  clipCurrentEl.addEventListener('click', () => {
+    setStatus('请使用扩展按钮在当前网页剪藏；新标签页没有可剪藏正文。');
+  });
+
+  aiRecallEl.addEventListener('click', () => {
+    setStatus('AI 找回入口已预留；未配置或请求失败时，本地搜索继续可用。');
+    if (!searchInputEl.value.trim()) {
+      searchInputEl.value = 'AI';
+      refreshDashboard();
+    }
+    searchInputEl.focus();
+  });
 }
 
 function applyPrefs() {
@@ -222,8 +274,51 @@ function applyPrefs() {
   rightPanelEl.classList.toggle('open', !prefs.rightPanelCollapsed);
   themeToggleEl.textContent = prefs.theme === 'dark' ? '浅色' : '深色';
 
-  for (const button of densityButtonEls) {
+  for (const button of densityButtons) {
     button.classList.toggle('active', button.dataset.density === prefs.density);
+  }
+}
+
+async function savePrefs(update: Partial<Prefs>) {
+  const previousPrefs = prefs;
+  prefs = normalizePrefs({ ...prefs, ...update });
+  applyPrefs();
+
+  try {
+    const res = await chrome.runtime.sendMessage({
+      type: 'SAVE_NEW_TAB_PREFS',
+      update,
+    }) as RuntimeResponse<{ prefs?: Prefs }>;
+
+    if (!res?.ok || !res.prefs) {
+      throw new Error(res?.error ?? '偏好设置保存失败');
+    }
+
+    prefs = normalizePrefs(res.prefs);
+    applyPrefs();
+  } catch (error) {
+    prefs = previousPrefs;
+    applyPrefs();
+    setStatus(`偏好设置保存失败：${errorMessage(error)}`);
+  }
+}
+
+async function importBookmarks() {
+  setStatus('正在导入浏览器书签...');
+  try {
+    const res = await chrome.runtime.sendMessage({ type: 'IMPORT_BROWSER_BOOKMARKS' }) as RuntimeResponse<{
+      imported?: number;
+      total?: number;
+    }>;
+
+    if (!res?.ok) {
+      throw new Error(res?.error ?? '导入浏览器书签失败');
+    }
+
+    await refreshDashboard();
+    setStatus(`已导入 ${res.imported ?? 0} / ${res.total ?? 0} 个浏览器书签`);
+  } catch (error) {
+    setStatus(`导入失败：${errorMessage(error)}`);
   }
 }
 
