@@ -76,7 +76,7 @@ describe('dashboard view model', () => {
     expect(data.cards[0].faviconUrl).toBe('');
   });
 
-  test('builds favicon fallback for http urls without faviconUrl', () => {
+  test('builds favicon fallback for https urls without faviconUrl', () => {
     const data = buildDashboardData([
       clip({
         url: 'https://example.com/path',
@@ -86,6 +86,18 @@ describe('dashboard view model', () => {
     ]);
 
     expect(data.cards[0].faviconUrl).toBe('https://example.com/favicon.ico');
+  });
+
+  test('builds favicon fallback for http urls without faviconUrl', () => {
+    const data = buildDashboardData([
+      clip({
+        url: 'http://example.com/path',
+        canonicalUrl: 'http://example.com/path',
+        faviconUrl: '',
+      }),
+    ]);
+
+    expect(data.cards[0].faviconUrl).toBe('http://example.com/favicon.ico');
   });
 
   test('uses domain initial when title is empty', () => {
