@@ -64,6 +64,30 @@ describe('dashboard view model', () => {
     expect(data.recent[0].title).toBe('最近剪藏');
   });
 
+  test('returns empty favicon fallback for non-web urls', () => {
+    const data = buildDashboardData([
+      clip({
+        url: 'mailto:test@example.com',
+        canonicalUrl: 'mailto:test@example.com',
+        faviconUrl: '',
+      }),
+    ]);
+
+    expect(data.cards[0].faviconUrl).toBe('');
+  });
+
+  test('builds favicon fallback for http urls without faviconUrl', () => {
+    const data = buildDashboardData([
+      clip({
+        url: 'https://example.com/path',
+        canonicalUrl: 'https://example.com/path',
+        faviconUrl: '',
+      }),
+    ]);
+
+    expect(data.cards[0].faviconUrl).toBe('https://example.com/favicon.ico');
+  });
+
   test('uses domain initial when title is empty', () => {
     expect(cardInitial('', 'f3.fenxi365.com')).toBe('F');
     expect(cardInitial('纷析云', 'f3.fenxi365.com')).toBe('纷');

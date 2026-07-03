@@ -106,7 +106,9 @@ function resolveFaviconUrl(clip: SavedClip): string {
   if (clip.faviconUrl) return clip.faviconUrl;
 
   try {
-    return `${new URL(clip.url).origin}/favicon.ico`;
+    const url = new URL(clip.url);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return `${url.origin}/favicon.ico`;
   } catch {
     return '';
   }
