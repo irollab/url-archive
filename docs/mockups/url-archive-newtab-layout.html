@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>URL Archive 新标签页布局 Mockup</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #f4f7f8; color: #17212f; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      main { max-width: 1220px; margin: 0 auto; padding: 34px 28px 46px; }
+      h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: 0; }
+      .lead { margin: 0 0 22px; color: #667085; line-height: 1.65; }
+      .mock { background: #fff; border: 1px solid #d7dee8; border-radius: 14px; box-shadow: 0 18px 45px rgba(15, 23, 42, .08); overflow: hidden; }
+      .topbar { height: 72px; display: grid; grid-template-columns: 180px minmax(280px, 1fr) auto; gap: 14px; align-items: center; padding: 0 22px; border-bottom: 1px solid #e1e7ef; background: #fff; }
+      .brand { font-weight: 850; font-size: 17px; }
+      .search { height: 42px; border: 1px solid #d6dee8; border-radius: 12px; display: flex; align-items: center; padding: 0 14px; color: #667085; background: #f8fafc; font-size: 13px; }
+      .tools { display: flex; gap: 8px; }
+      .tool { border: 1px solid #d6dee8; background: #fff; border-radius: 10px; padding: 9px 11px; color: #344054; font-size: 12px; }
+      .canvas { display: grid; grid-template-columns: 210px minmax(0, 1fr) 285px; gap: 18px; padding: 18px; min-height: 650px; background: #f7faf9; }
+      .sidebar, .content, .right { min-width: 0; }
+      .panel { background: #fff; border: 1px solid #dbe3ec; border-radius: 12px; padding: 12px; }
+      .panel h2 { margin: 0 0 10px; font-size: 13px; }
+      .cat { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 9px 10px; border-radius: 9px; color: #344054; font-size: 13px; }
+      .cat.active { background: #eaf2ff; color: #1d4ed8; font-weight: 750; }
+      .cat span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .count { color: #667085; font-size: 11px; }
+      .modebar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+      .tabs { display: flex; gap: 8px; }
+      .tab { border: 1px solid #d6dee8; border-radius: 999px; padding: 7px 11px; color: #344054; background: #fff; font-size: 12px; }
+      .tab.active { background: #17212f; color: #fff; border-color: #17212f; }
+      .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+      .tile { min-height: 106px; border: 1px solid #dbe3ec; border-radius: 12px; background: #fff; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; }
+      .icon { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: #eef4f8; color: #17212f; font-weight: 850; border: 1px solid #d6dee8; }
+      .title { font-weight: 750; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .meta { color: #667085; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .stack { display: grid; gap: 12px; }
+      .feature { border: 1px solid #dbe3ec; border-radius: 12px; padding: 12px; background: #fff; }
+      .feature strong { display: block; font-size: 13px; margin-bottom: 5px; }
+      .feature span { display: block; color: #667085; font-size: 12px; line-height: 1.45; }
+      .drawer-note { margin-top: 18px; padding: 14px 16px; background: #eef6ff; border: 1px solid #cfe2ff; border-radius: 12px; color: #344054; line-height: 1.6; }
+      @media (max-width: 980px) {
+        .topbar { grid-template-columns: 1fr; height: auto; padding: 16px; }
+        .canvas { grid-template-columns: 1fr; }
+        .right { display: none; }
+        .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>URL Archive 新标签页核心布局</h1>
+      <p class="lead">方向：浏览器首页工作台。首屏优先让用户直观看到书签，宽屏常驻插件功能区，窄屏收进抽屉。</p>
+      <section class="mock">
+        <header class="topbar">
+          <div class="brand">URL Archive</div>
+          <div class="search">搜索书签、剪藏、分类、备注、语义线索</div>
+          <div class="tools">
+            <div class="tool">紧凑</div>
+            <div class="tool">标准</div>
+            <div class="tool">大图标</div>
+            <div class="tool">剪藏</div>
+            <div class="tool">导入</div>
+          </div>
+        </header>
+        <div class="canvas">
+          <aside class="sidebar panel">
+            <h2>分类</h2>
+            <div class="cat active"><span>全部收藏</span><b class="count">128</b></div>
+            <div class="cat"><span>书签栏 / 工作</span><b class="count">42</b></div>
+            <div class="cat"><span>AI 工具</span><b class="count">18</b></div>
+            <div class="cat"><span>财务 SaaS</span><b class="count">11</b></div>
+            <div class="cat"><span>开发文档</span><b class="count">27</b></div>
+            <div class="cat"><span>未整理</span><b class="count">9</b></div>
+          </aside>
+          <section class="content">
+            <div class="modebar">
+              <div class="tabs"><span class="tab active">常用</span><span class="tab">最近</span><span class="tab">剪藏</span><span class="tab">未回访</span></div>
+              <div class="tab">排序：最近使用</div>
+            </div>
+            <div class="grid">
+              <div class="tile"><div class="icon">F</div><div><div class="title">纷析云</div><div class="meta">财务 SaaS</div></div></div>
+              <div class="tile"><div class="icon">G</div><div><div class="title">GitHub</div><div class="meta">开发</div></div></div>
+              <div class="tile"><div class="icon">A</div><div><div class="title">AI 工具合集</div><div class="meta">AI 工具</div></div></div>
+              <div class="tile"><div class="icon">D</div><div><div class="title">Docs</div><div class="meta">文档</div></div></div>
+              <div class="tile"><div class="icon">O</div><div><div class="title">Obsidian</div><div class="meta">知识库</div></div></div>
+              <div class="tile"><div class="icon">P</div><div><div class="title">Product Hunt</div><div class="meta">产品</div></div></div>
+              <div class="tile"><div class="icon">N</div><div><div class="title">Notion</div><div class="meta">工作</div></div></div>
+              <div class="tile"><div class="icon">B</div><div><div class="title">博客后台</div><div class="meta">运营</div></div></div>
+              <div class="tile"><div class="icon">S</div><div><div class="title">Search Notes</div><div class="meta">剪藏</div></div></div>
+              <div class="tile"><div class="icon">+</div><div><div class="title">更多收藏</div><div class="meta">展开</div></div></div>
+            </div>
+          </section>
+          <aside class="right stack">
+            <div class="feature"><strong>今日回访</strong><span>3 条长期未打开但可能有价值的收藏。</span></div>
+            <div class="feature"><strong>AI 找回</strong><span>输入“那个智能记账工具”，匹配标题、摘要、标签和备注。</span></div>
+            <div class="feature"><strong>最近剪藏</strong><span>Embedding Search、Postgres 索引、纷析云。</span></div>
+            <div class="feature"><strong>插件操作</strong><span>剪藏当前页、导入书签、打开设置、同步 Obsidian。</span></div>
+          </aside>
+        </div>
+      </section>
+      <div class="drawer-note">响应式策略：宽屏右侧栏常驻；中等宽度右侧栏可折叠；窄屏只保留搜索、分类和书签墙，插件功能进入右上角抽屉。</div>
+    </main>
+  </body>
+</html>
