@@ -8,7 +8,7 @@ body { margin: 0; font-family: system-ui, sans-serif; color: #17212f; background
 .tool.primary, .tool.active { background: #17212f; color: #fff; border-color: #17212f; }
 .status { min-height: 24px; padding: 6px 22px; color: #667085; font-size: 13px; }
 .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; gap: 18px; padding: 18px 22px 28px; }
-.sidebar, .right-panel, .bookmark-card, .widget { background: #fff; border: 1px solid #dbe3ec; border-radius: 12px; }
+.sidebar, .bookmark-card, .widget { background: #fff; border: 1px solid #dbe3ec; border-radius: 12px; }
 .sidebar { padding: 12px; }
 .panel-title, .content-title { font-weight: 750; }
 .category-list { display: grid; gap: 6px; margin-top: 10px; }

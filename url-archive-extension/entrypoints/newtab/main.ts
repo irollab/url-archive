@@ -91,6 +91,8 @@ let dashboardData: DashboardData | null = null;
 let currentFolder = '';
 let searchTimer: number | undefined;
 let dashboardRequestSeq = 0;
+let prefsSaveSeq = 0;
+let importingBookmarks = false;
 
 init();
 
@@ -280,7 +282,8 @@ function applyPrefs() {
 }
 
 async function savePrefs(update: Partial<Prefs>) {
-  const previousPrefs = prefs;
+  const requestId = ++prefsSaveSeq;
+  const previousPrefs = { ...prefs };
   prefs = normalizePrefs({ ...prefs, ...update });
   applyPrefs();
 
@@ -294,16 +297,27 @@ async function savePrefs(update: Partial<Prefs>) {
       throw new Error(res?.error ?? '偏好设置保存失败');
     }
 
-    prefs = normalizePrefs(res.prefs);
-    applyPrefs();
+    if (requestId === prefsSaveSeq) {
+      prefs = normalizePrefs(res.prefs);
+      applyPrefs();
+    }
   } catch (error) {
-    prefs = previousPrefs;
-    applyPrefs();
-    setStatus(`偏好设置保存失败：${errorMessage(error)}`);
+    if (requestId === prefsSaveSeq) {
+      prefs = previousPrefs;
+      applyPrefs();
+      setStatus(`偏好设置保存失败：${errorMessage(error)}`);
+    }
   }
 }
 
 async function importBookmarks() {
+  if (importingBookmarks) return;
+
+  importingBookmarks = true;
+  for (const button of importButtons) {
+    button.disabled = true;
+  }
+
   setStatus('正在导入浏览器书签...');
   try {
     const res = await chrome.runtime.sendMessage({ type: 'IMPORT_BROWSER_BOOKMARKS' }) as RuntimeResponse<{
@@ -319,6 +333,11 @@ async function importBookmarks() {
     setStatus(`已导入 ${res.imported ?? 0} / ${res.total ?? 0} 个浏览器书签`);
   } catch (error) {
     setStatus(`导入失败：${errorMessage(error)}`);
+  } finally {
+    importingBookmarks = false;
+    for (const button of importButtons) {
+      button.disabled = false;
+    }
   }
 }
 
