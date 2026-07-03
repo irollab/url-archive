@@ -29,13 +29,13 @@ function clip(overrides: Partial<SavedClip>): SavedClip {
 describe('dashboard view model', () => {
   test('maps saved clips to visual cards with source labels', () => {
     const data = buildDashboardData([
-      clip({ title: '书签 A', source: 'bookmark' }),
+      clip({ title: 'Example', source: 'bookmark' }),
       clip({ url: 'https://clip.example.com', title: '剪藏 B', source: 'clip', domain: 'clip.example.com' }),
     ]);
 
     expect(data.cards).toHaveLength(2);
     expect(data.cards[0]).toMatchObject({
-      title: '书签 A',
+      title: 'Example',
       sourceLabel: '书签',
       faviconUrl: 'https://example.com/favicon.ico',
       initial: 'E',

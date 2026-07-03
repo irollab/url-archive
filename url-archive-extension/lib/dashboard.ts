@@ -87,7 +87,7 @@ export function toDashboardCard(clip: SavedClip): DashboardCard {
     queued: clip.queued,
     revived: clip.revived,
     lastVisited: clip.lastVisited,
-    initial: cardInitial('', clip.domain),
+    initial: cardInitial(clip.title, clip.domain),
   };
 }
 
