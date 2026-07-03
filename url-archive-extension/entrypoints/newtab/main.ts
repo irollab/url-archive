@@ -161,7 +161,7 @@ async function refreshDashboard() {
 }
 
 function renderDashboard(data: DashboardData, query: string, folder: string) {
-  renderCategories(data, folder);
+  renderCategories(data.folders);
   renderCards(data.cards, query);
   renderRightPanel(data);
 }
@@ -212,22 +212,14 @@ async function saveEdit() {
   }
 }
 
-function renderCategories(data: DashboardData, folder: string) {
-  const topLevelFolders = getTopLevelFolders(data.folders);
-  const totalCount = data.stats.total;
-
-  const allButton = categoryButtonHtml('全部收藏', totalCount, '', folder === '');
-  const folderButtons = topLevelFolders
-    .map((item) => categoryButtonHtml(item.name, item.count, item.path, folder === item.path))
-    .join('');
-
-  categoryListEl.innerHTML = allButton + folderButtons;
-  for (const button of categoryListEl.querySelectorAll<HTMLButtonElement>('.category-button')) {
-    button.addEventListener('click', () => {
-      currentFolder = button.dataset.folder ?? '';
-      contentTitleEl.textContent = currentFolder || '全部收藏';
-      refreshDashboard();
-    });
+function renderCategories(folders: BookmarkFolderOption[]) {
+  categoryListEl.replaceChildren();
+  categoryListEl.append(categoryButton('全部收藏', '', dashboardData?.stats.total ?? 0));
+  if (currentFolder) {
+    categoryListEl.append(categoryButton('上级', parentFolder(currentFolder), 0, 'category-back'));
+  }
+  for (const folder of childFolders(folders, currentFolder)) {
+    categoryListEl.append(categoryButton(folderName(folder.path), folder.path, folder.count));
   }
 }
 
@@ -448,20 +440,35 @@ function faviconHtml(card: DashboardCard): string {
   return `<img class="favicon" src="${escapeAttr(card.faviconUrl)}" alt="" data-initial="${escapeAttr(initial)}" />`;
 }
 
-function categoryButtonHtml(label: string, count: number, folder: string, active: boolean): string {
-  return `
-    <button class="category-button${active ? ' active' : ''}" type="button" data-folder="${escapeAttr(folder)}" title="${escapeAttr(folder || label)}">
-      <span>${escapeHtml(label)}</span>
-      <small>${escapeHtml(String(count))}</small>
-    </button>
-  `;
+function categoryButton(label: string, folder: string, count: number, extraClass = ''): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = `category-button${folder === currentFolder ? ' active' : ''}${extraClass ? ` ${extraClass}` : ''}`;
+  btn.innerHTML = `<span>${escapeHtml(label)}</span>${count ? `<b>${count}</b>` : '<b></b>'}`;
+  btn.addEventListener('click', () => {
+    currentFolder = folder;
+    contentTitleEl.textContent = folder || '全部收藏';
+    refreshDashboard();
+  });
+  return btn;
 }
 
-function getTopLevelFolders(folders: BookmarkFolderOption[]): Array<BookmarkFolderOption & { name: string }> {
+function childFolders(folders: BookmarkFolderOption[], parent: string): BookmarkFolderOption[] {
+  const prefix = parent ? `${parent} / ` : '';
+  const depth = parent ? parent.split(' / ').length + 1 : 1;
   return folders
-    .filter((folder) => folder.path && !folder.path.includes(' / '))
-    .map((folder) => ({ ...folder, name: folder.path }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-CN'));
+    .filter((folder) => folder.path.startsWith(prefix) && folder.path.split(' / ').length === depth)
+    .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path, 'zh-CN'));
+}
+
+function parentFolder(path: string): string {
+  const parts = path.split(' / ').filter(Boolean);
+  return parts.slice(0, -1).join(' / ');
+}
+
+function folderName(path: string): string {
+  const parts = path.split(' / ').filter(Boolean);
+  return parts.at(-1) ?? path;
 }
 
 function normalizePrefs(value: Partial<Prefs>): Prefs {
