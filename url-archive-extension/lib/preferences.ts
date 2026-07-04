@@ -15,6 +15,7 @@ export interface NewTabPrefs {
   columnGap: number;
   rowGap: number;
   showLabels: boolean;
+  galleryMode: boolean;
 }
 
 const DEFAULT_PREFS: NewTabPrefs = {
@@ -29,6 +30,7 @@ const DEFAULT_PREFS: NewTabPrefs = {
   columnGap: 24,
   rowGap: 30,
   showLabels: true,
+  galleryMode: false,
 };
 
 export async function loadNewTabPrefs(): Promise<NewTabPrefs> {
@@ -67,6 +69,7 @@ export function normalizePrefs(value: unknown): NewTabPrefs {
     columnGap: positiveInt(raw.columnGap, DEFAULT_PREFS.columnGap, 0, 120),
     rowGap: positiveInt(raw.rowGap, DEFAULT_PREFS.rowGap, 0, 120),
     showLabels: typeof raw.showLabels === 'boolean' ? raw.showLabels : DEFAULT_PREFS.showLabels,
+    galleryMode: typeof raw.galleryMode === 'boolean' ? raw.galleryMode : DEFAULT_PREFS.galleryMode,
   };
 }
 

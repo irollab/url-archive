@@ -29,6 +29,7 @@ describe('new tab preferences', () => {
       columnGap: 24,
       rowGap: 30,
       showLabels: true,
+      galleryMode: false,
     });
   });
 
@@ -45,6 +46,7 @@ describe('new tab preferences', () => {
       columnGap: 40,
       rowGap: 50,
       showLabels: false,
+      galleryMode: true,
     });
     await expect(loadNewTabPrefs()).resolves.toEqual({
       density: 'compact',
@@ -58,6 +60,7 @@ describe('new tab preferences', () => {
       columnGap: 40,
       rowGap: 50,
       showLabels: false,
+      galleryMode: true,
     });
   });
 
@@ -74,6 +77,7 @@ describe('new tab preferences', () => {
       columnGap: 120,
       rowGap: 120,
       showLabels: false,
+      galleryMode: false,
     });
     await replaceNewTabPrefs({
       density: 'large',
@@ -87,6 +91,7 @@ describe('new tab preferences', () => {
       columnGap: 24,
       rowGap: 30,
       showLabels: true,
+      galleryMode: false,
     });
     await expect(loadNewTabPrefs()).resolves.toEqual({
       density: 'large',
@@ -100,6 +105,7 @@ describe('new tab preferences', () => {
       columnGap: 24,
       rowGap: 30,
       showLabels: true,
+      galleryMode: false,
     });
   });
 
@@ -129,6 +135,15 @@ describe('new tab preferences', () => {
       columnGap: 24,
       rowGap: 30,
       showLabels: true,
+      galleryMode: false,
     });
+  });
+
+  test('normalizes galleryMode', async () => {
+    store.new_tab_prefs = { galleryMode: 'yes' };
+    await expect(loadNewTabPrefs()).resolves.toMatchObject({ galleryMode: false });
+
+    store.new_tab_prefs = { galleryMode: true };
+    await expect(loadNewTabPrefs()).resolves.toMatchObject({ galleryMode: true });
   });
 });
