@@ -2,6 +2,11 @@ import { defineConfig } from 'wxt';
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
+  vite: () => ({
+    build: {
+      modulePreload: false,
+    },
+  }),
   manifest: {
     name: 'URL Archive',
     description: '一键把网页剪藏进 Obsidian，AI 自动摘要与标签。',
