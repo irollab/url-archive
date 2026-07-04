@@ -567,7 +567,6 @@ git commit -m "feat: add DomeGallery class with drag rotation and inertia"
     const el = this.focusedEl;
     const overlay = this.viewer.querySelector('.dg-enlarge') as HTMLElement | null;
     if (!overlay) return;
-    overlay.style.transform = overlay.style.transform; // 保留当前位置作为过渡起点
     overlay.style.opacity = '0';
     const cleanup = () => {
       overlay.remove();
