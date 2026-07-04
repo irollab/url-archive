@@ -54,6 +54,16 @@ describe('dashboard view model', () => {
     expect(data.cards.map((card) => card.title)).toEqual(['AI', '财务']);
   });
 
+  test('returns every dashboard card by default', () => {
+    const clips = Array.from({ length: 90 }, (_, index) => clip({
+      url: `https://example.com/${index}`,
+      canonicalUrl: `https://example.com/${index}`,
+      title: `Example ${index}`,
+    }));
+
+    expect(buildDashboardData(clips).cards).toHaveLength(90);
+  });
+
   test('builds right panel data for revisit and recent clips', () => {
     const data = buildDashboardData([
       clip({ title: '旧书签', clipped: '2026-06-01T00:00:00.000Z', revived: 0 }),

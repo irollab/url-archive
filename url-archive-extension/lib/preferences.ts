@@ -8,6 +8,8 @@ export interface NewTabPrefs {
   theme: NewTabTheme;
   rightPanelCollapsed: boolean;
   backgroundImageUrl: string;
+  wallpaperMask: number;
+  wallpaperBlur: number;
   gridColumns: number;
   gridRows: number;
   cardRadius: number;
@@ -16,6 +18,9 @@ export interface NewTabPrefs {
   rowGap: number;
   showLabels: boolean;
   galleryMode: boolean;
+  searchBoxVisible: boolean;
+  searchBoxWidth: number;
+  searchBoxRadius: number;
 }
 
 const DEFAULT_PREFS: NewTabPrefs = {
@@ -23,14 +28,19 @@ const DEFAULT_PREFS: NewTabPrefs = {
   theme: 'light',
   rightPanelCollapsed: false,
   backgroundImageUrl: '',
-  gridColumns: 5,
-  gridRows: 2,
-  cardRadius: 26,
+  wallpaperMask: 58,
+  wallpaperBlur: 0,
+  gridColumns: 6,
+  gridRows: 3,
+  cardRadius: 24,
   iconSize: 100,
-  columnGap: 24,
-  rowGap: 30,
+  columnGap: 42,
+  rowGap: 54,
   showLabels: true,
   galleryMode: false,
+  searchBoxVisible: true,
+  searchBoxWidth: 75,
+  searchBoxRadius: 9,
 };
 
 export async function loadNewTabPrefs(): Promise<NewTabPrefs> {
@@ -53,7 +63,7 @@ export async function replaceNewTabPrefs(value: NewTabPrefs): Promise<NewTabPref
 
 export function normalizePrefs(value: unknown): NewTabPrefs {
   const raw = isRecord(value) ? value : {};
-  return {
+  const prefs = {
     density: isDensity(raw.density) ? raw.density : DEFAULT_PREFS.density,
     theme: isTheme(raw.theme) ? raw.theme : DEFAULT_PREFS.theme,
     rightPanelCollapsed: typeof raw.rightPanelCollapsed === 'boolean'
@@ -62,6 +72,8 @@ export function normalizePrefs(value: unknown): NewTabPrefs {
     backgroundImageUrl: typeof raw.backgroundImageUrl === 'string'
       ? raw.backgroundImageUrl.trim()
       : DEFAULT_PREFS.backgroundImageUrl,
+    wallpaperMask: positiveInt(raw.wallpaperMask, DEFAULT_PREFS.wallpaperMask, 0, 100),
+    wallpaperBlur: positiveInt(raw.wallpaperBlur, DEFAULT_PREFS.wallpaperBlur, 0, 100),
     gridColumns: positiveInt(raw.gridColumns, DEFAULT_PREFS.gridColumns, 2, 12),
     gridRows: positiveInt(raw.gridRows, DEFAULT_PREFS.gridRows, 1, 8),
     cardRadius: positiveInt(raw.cardRadius, DEFAULT_PREFS.cardRadius, 0, 50),
@@ -70,7 +82,27 @@ export function normalizePrefs(value: unknown): NewTabPrefs {
     rowGap: positiveInt(raw.rowGap, DEFAULT_PREFS.rowGap, 0, 120),
     showLabels: typeof raw.showLabels === 'boolean' ? raw.showLabels : DEFAULT_PREFS.showLabels,
     galleryMode: typeof raw.galleryMode === 'boolean' ? raw.galleryMode : DEFAULT_PREFS.galleryMode,
+    searchBoxVisible: typeof raw.searchBoxVisible === 'boolean' ? raw.searchBoxVisible : DEFAULT_PREFS.searchBoxVisible,
+    searchBoxWidth: positiveInt(raw.searchBoxWidth, DEFAULT_PREFS.searchBoxWidth, 50, 100),
+    searchBoxRadius: positiveInt(raw.searchBoxRadius, DEFAULT_PREFS.searchBoxRadius, 0, 50),
   };
+  if (
+    prefs.gridColumns === 5 &&
+    prefs.gridRows === 2 &&
+    prefs.cardRadius === 26 &&
+    prefs.columnGap === 24 &&
+    prefs.rowGap === 30
+  ) {
+    return {
+      ...prefs,
+      gridColumns: DEFAULT_PREFS.gridColumns,
+      gridRows: DEFAULT_PREFS.gridRows,
+      cardRadius: DEFAULT_PREFS.cardRadius,
+      columnGap: DEFAULT_PREFS.columnGap,
+      rowGap: DEFAULT_PREFS.rowGap,
+    };
+  }
+  return prefs;
 }
 
 function positiveInt(value: unknown, fallback: number, min: number, max: number): number {

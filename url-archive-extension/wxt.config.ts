@@ -2,6 +2,7 @@ import { defineConfig } from 'wxt';
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
+  outDir: process.env.URL_ARCHIVE_WXT_OUT_DIR ?? '.output',
   vite: () => ({
     build: {
       modulePreload: false,

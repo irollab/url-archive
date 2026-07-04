@@ -46,7 +46,8 @@ export interface DashboardData {
 }
 
 export function buildDashboardData(clips: SavedClip[], options: DashboardOptions = {}): DashboardData {
-  const { query = '', folder = '', limit = 50 } = options;
+  const { query = '', folder = '' } = options;
+  const limit = options.limit ?? clips.length;
   const cards = searchSavedClips(clips, query, { filter: 'all', folder, limit }).map(toDashboardCard);
   const recent = [...clips]
     .filter((clip) => (clip.source ?? 'clip') === 'clip')

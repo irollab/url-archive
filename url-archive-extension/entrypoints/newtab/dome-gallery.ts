@@ -69,6 +69,14 @@ export type DomeGalleryOptions = {
 const DEFAULT_SEGMENTS = 35;
 const MAX_VERTICAL_ROTATION_DEG = 5;
 const DRAG_SENSITIVITY = 20;
+const POINTER_SAMPLE_WINDOW_MS = 120;
+const FRAME_MS = 1000 / 60;
+const MIN_INERTIA_DEG_PER_FRAME = 0.03;
+const MAX_INERTIA_DEG_PER_FRAME = 4.5;
+const INERTIA_FRICTION = 0.94;
+// 自动旋转角速度（度/秒），方向会继承最后一次水平拖拽/甩动
+const AUTO_ROTATE_DEG_PER_SEC = 6;
+const AUTO_ROTATE_DEG_PER_FRAME = AUTO_ROTATE_DEG_PER_SEC / 60;
 
 export class DomeGallery {
   private root: HTMLElement;
@@ -84,6 +92,7 @@ export class DomeGallery {
   private rotation = { x: 0, y: 0 };
   private startRot = { x: 0, y: 0 };
   private startPos: { x: number; y: number } | null = null;
+  private pointerSamples: Array<{ x: number; y: number; time: number }> = [];
   private dragging = false;
   private moved = false;
   private inertiaRAF: number | null = null;
@@ -92,6 +101,9 @@ export class DomeGallery {
   private opening = false;
   private openStartedAt = 0;
   private onKey: (e: KeyboardEvent) => void = () => {};
+  private autoRAF: number | null = null;
+  private autoLast = 0;
+  private autoRotateDirection: 1 | -1 = 1;
 
   constructor(root: HTMLElement, options: DomeGalleryOptions) {
     this.root = root;
@@ -103,6 +115,7 @@ export class DomeGallery {
     this.ro = new ResizeObserver((entries) => this.onResize(entries[0].contentRect));
     this.ro.observe(this.root);
     this.applyTransform();
+    this.autoRAF = requestAnimationFrame(this.tickAuto);
   }
 
   setItems(items: DomeItem[]): void {
@@ -118,10 +131,24 @@ export class DomeGallery {
   destroy(): void {
     this.ro.disconnect();
     if (this.inertiaRAF) cancelAnimationFrame(this.inertiaRAF);
+    if (this.autoRAF) cancelAnimationFrame(this.autoRAF);
     this.root.classList.remove('dg-scroll-lock');
     this.root.replaceChildren();
     window.removeEventListener('keydown', this.onKey);
   }
+
+  // 自动缓慢旋转：仅在空闲时递增 rotation.y（拖拽/惯性/放大态/容器隐藏时自动暂停）
+  private tickAuto = (now: number) => {
+    const dt = this.autoLast ? (now - this.autoLast) / 1000 : 0;
+    this.autoLast = now;
+    const idle = !this.dragging && !this.opening && !this.focusedEl && this.inertiaRAF === null;
+    // offsetParent 为 null 表示容器被隐藏（卡片模式），此时不做无谓渲染
+    if (idle && dt > 0 && dt < 0.1 && this.root.offsetParent !== null) {
+      this.rotation.y = wrapAngleSigned(this.rotation.y + this.autoRotateDirection * AUTO_ROTATE_DEG_PER_SEC * dt);
+      this.applyTransform();
+    }
+    this.autoRAF = requestAnimationFrame(this.tickAuto);
+  };
 
   private buildScaffold() {
     this.root.classList.add('dome-gallery');
@@ -292,19 +319,25 @@ export class DomeGallery {
   private bindPointer() {
     this.main.style.touchAction = 'none';
     this.main.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       if (this.focusedEl) return;
       this.stopInertia();
       this.dragging = true;
       this.moved = false;
       this.startRot = { ...this.rotation };
       this.startPos = { x: e.clientX, y: e.clientY };
+      this.pointerSamples = [{ x: e.clientX, y: e.clientY, time: performance.now() }];
+      this.root.classList.add('dg-dragging');
       (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     });
     this.main.addEventListener('pointermove', (e) => {
       if (!this.dragging || !this.startPos || this.focusedEl) return;
+      const now = performance.now();
       const dx = e.clientX - this.startPos.x;
       const dy = e.clientY - this.startPos.y;
       if (!this.moved && dx * dx + dy * dy > 16) this.moved = true;
+      this.pointerSamples.push({ x: e.clientX, y: e.clientY, time: now });
+      this.pointerSamples = this.pointerSamples.filter((sample) => now - sample.time <= POINTER_SAMPLE_WINDOW_MS);
       this.rotation = {
         x: clamp(this.startRot.x - dy / DRAG_SENSITIVITY, -MAX_VERTICAL_ROTATION_DEG, MAX_VERTICAL_ROTATION_DEG),
         y: wrapAngleSigned(this.startRot.y + dx / DRAG_SENSITIVITY),
@@ -314,12 +347,33 @@ export class DomeGallery {
     const end = (e: PointerEvent) => {
       if (!this.dragging) return;
       this.dragging = false;
-      if (this.moved && this.startPos) {
-        const vx = clamp(((e.clientX - this.startPos.x) / DRAG_SENSITIVITY) * 0.02, -1.2, 1.2);
-        const vy = clamp(((e.clientY - this.startPos.y) / DRAG_SENSITIVITY) * 0.02, -1.2, 1.2);
-        if (Math.abs(vx) > 0.005 || Math.abs(vy) > 0.005) this.startInertia(vx, vy);
+      this.root.classList.remove('dg-dragging');
+      if (this.moved) {
+        const now = performance.now();
+        this.pointerSamples.push({ x: e.clientX, y: e.clientY, time: now });
+        const samples = this.pointerSamples.filter((sample) => now - sample.time <= POINTER_SAMPLE_WINDOW_MS);
+        const first = samples[0];
+        const last = samples[samples.length - 1];
+        const elapsed = Math.max(16, last.time - first.time);
+        const vx = clamp(
+          ((last.x - first.x) / elapsed / DRAG_SENSITIVITY) * FRAME_MS,
+          -MAX_INERTIA_DEG_PER_FRAME,
+          MAX_INERTIA_DEG_PER_FRAME,
+        );
+        const vy = clamp(
+          ((last.y - first.y) / elapsed / DRAG_SENSITIVITY) * FRAME_MS,
+          -MAX_INERTIA_DEG_PER_FRAME,
+          MAX_INERTIA_DEG_PER_FRAME,
+        );
+        if (Math.abs(vx) > MIN_INERTIA_DEG_PER_FRAME) {
+          this.autoRotateDirection = vx > 0 ? 1 : -1;
+        }
+        if (Math.abs(vx) > MIN_INERTIA_DEG_PER_FRAME || Math.abs(vy) > MIN_INERTIA_DEG_PER_FRAME) {
+          this.startInertia(vx, vy);
+        }
         this.lastDragEndAt = performance.now();
       }
+      this.pointerSamples = [];
     };
     this.main.addEventListener('pointerup', end);
     this.main.addEventListener('pointercancel', end);
@@ -333,18 +387,22 @@ export class DomeGallery {
   }
 
   private startInertia(vx: number, vy: number) {
-    let vX = clamp(vx, -1.4, 1.4) * 80;
-    let vY = clamp(vy, -1.4, 1.4) * 80;
+    let vX = clamp(vx, -MAX_INERTIA_DEG_PER_FRAME, MAX_INERTIA_DEG_PER_FRAME);
+    let vY = clamp(vy, -MAX_INERTIA_DEG_PER_FRAME, MAX_INERTIA_DEG_PER_FRAME);
+    if (Math.abs(vX) > MIN_INERTIA_DEG_PER_FRAME) {
+      this.autoRotateDirection = vX > 0 ? 1 : -1;
+    }
     const step = () => {
-      vX *= 0.965;
-      vY *= 0.965;
-      if (Math.abs(vX) < 0.01 && Math.abs(vY) < 0.01) {
+      vX *= INERTIA_FRICTION;
+      vY *= INERTIA_FRICTION;
+      if (Math.abs(vX) <= AUTO_ROTATE_DEG_PER_FRAME && Math.abs(vY) <= AUTO_ROTATE_DEG_PER_FRAME) {
         this.inertiaRAF = null;
+        this.autoLast = performance.now();
         return;
       }
       this.rotation = {
-        x: clamp(this.rotation.x - vY / 200, -MAX_VERTICAL_ROTATION_DEG, MAX_VERTICAL_ROTATION_DEG),
-        y: wrapAngleSigned(this.rotation.y + vX / 200),
+        x: clamp(this.rotation.x - vY, -MAX_VERTICAL_ROTATION_DEG, MAX_VERTICAL_ROTATION_DEG),
+        y: wrapAngleSigned(this.rotation.y + vX),
       };
       this.applyTransform();
       this.inertiaRAF = requestAnimationFrame(step);

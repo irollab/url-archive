@@ -24,7 +24,7 @@
             <svg class="theme-icon-dark" aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
           <button id="settingsToggle" class="icon-tool" type="button" aria-label="设置" title="设置">
-            <span aria-hidden="true">⚙</span>
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.92 4a1.65 1.65 0 0 0 1-1.51V2a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.3.22.63.22 1H21a2 2 0 1 1 0 4h-1.38c0 .37-.08.7-.22 1Z"/></svg>
           </button>
         </div>
       </header>
@@ -87,76 +87,122 @@
       </section>
 
       <section id="settingsPanel" class="settings-panel" hidden>
-        <div class="edit-head">
-          <strong>设置</strong>
+        <div class="settings-tabs">
+          <strong class="settings-title">设置</strong>
           <button id="settingsClose" class="icon-button" type="button" aria-label="关闭设置">×</button>
         </div>
-        <div class="settings-group">
-          <label>背景图</label>
-          <div class="inline-control">
-            <input id="backgroundImageInput" type="url" placeholder="图片 URL 或上传图片" />
+        <div class="settings-scroll">
+          <section class="settings-group">
+            <div class="settings-group-head">
+              <strong>壁纸</strong>
+              <button id="cycleWallpaper" class="mini-action icon-mini-action" type="button" aria-label="切换壁纸" title="切换壁纸">↻</button>
+              <button id="clearBackgroundImage" class="mini-action" type="button">恢复</button>
+            </div>
+            <button id="wallpaperPreview" class="wallpaper-preview" type="button" aria-label="上传壁纸" title="点击上传壁纸"></button>
+            <div class="range-field">
+              <span>遮罩浓度</span>
+              <input id="wallpaperMaskInput" type="range" min="0" max="100" value="58" />
+              <output id="wallpaperMaskValue" for="wallpaperMaskInput">58%</output>
+            </div>
+            <div class="range-field">
+              <span>模糊度</span>
+              <input id="wallpaperBlurInput" type="range" min="0" max="100" value="0" />
+              <output id="wallpaperBlurValue" for="wallpaperBlurInput">0%</output>
+            </div>
             <input id="backgroundImageFile" type="file" accept="image/*" hidden />
-            <button id="uploadBackgroundImage" class="tool" type="button">上传</button>
-            <button id="saveBackgroundImage" class="tool primary" type="button">应用</button>
-          </div>
-          <button id="clearBackgroundImage" class="tool" type="button">恢复默认背景</button>
-        </div>
-        <div class="settings-group">
-          <label>显示</label>
-          <div class="segmented">
-            <button class="tool density-button" type="button" data-density="compact">紧凑</button>
-            <button class="tool density-button active" type="button" data-density="standard">标准</button>
-            <button class="tool density-button" type="button" data-density="large">大图标</button>
-          </div>
-        </div>
-        <div class="settings-group">
-          <label>布局</label>
-          <div class="range-field">
-            <span>每行数量</span>
-            <input id="gridColumnsInput" type="range" min="2" max="12" step="1" />
-            <output id="gridColumnsValue" for="gridColumnsInput">5</output>
-          </div>
-          <div class="range-field">
-            <span>每页行数</span>
-            <input id="gridRowsInput" type="range" min="1" max="8" step="1" />
-            <output id="gridRowsValue" for="gridRowsInput">2</output>
-          </div>
-          <div class="range-field">
-            <span>图标圆角</span>
-            <input id="cardRadiusInput" type="range" min="0" max="50" step="1" />
-            <output id="cardRadiusValue" for="cardRadiusInput">26</output>
-          </div>
-          <div class="range-field">
-            <span>图标大小</span>
-            <input id="iconSizeInput" type="range" min="50" max="150" step="1" />
-            <output id="iconSizeValue" for="iconSizeInput">100%</output>
-          </div>
-          <div class="range-field">
-            <span>列间距</span>
-            <input id="columnGapInput" type="range" min="0" max="120" step="1" />
-            <output id="columnGapValue" for="columnGapInput">24px</output>
-          </div>
-          <div class="range-field">
-            <span>行间距</span>
-            <input id="rowGapInput" type="range" min="0" max="120" step="1" />
-            <output id="rowGapValue" for="rowGapInput">30px</output>
-          </div>
-          <label class="toggle-field">
-            <span>画廊模式</span>
-            <input id="galleryModeInput" type="checkbox" />
-            <span class="toggle-switch" aria-hidden="true"></span>
-          </label>
-          <label class="toggle-field">
-            <span>隐藏图标名称</span>
-            <input id="showLabelsInput" type="checkbox" />
-            <span class="toggle-switch" aria-hidden="true"></span>
-          </label>
-        </div>
-        <div class="settings-group">
-          <label>插件操作</label>
-          <button id="clipCurrent" class="wide-action" type="button">剪藏最近网页</button>
-          <button id="importBookmarks" class="wide-action" type="button">导入浏览器书签</button>
-          <button id="openSettings" class="wide-action" type="button">打开扩展设置</button>
+          </section>
+
+          <section class="settings-group">
+            <div class="settings-group-head"><strong>视图</strong></div>
+            <div class="range-field">
+              <span>屏幕缩放</span>
+              <input type="range" min="80" max="120" value="100" />
+              <output>100%</output>
+            </div>
+            <div class="range-field">
+              <span>侧边栏缩放</span>
+              <input type="range" min="80" max="120" value="100" />
+              <output>100%</output>
+            </div>
+            <label class="toggle-field"><span>启用画廊模式</span><input id="galleryModeInput" type="checkbox" /><span class="toggle-switch" aria-hidden="true"></span></label>
+          </section>
+
+          <section class="settings-group">
+            <div class="settings-group-head"><strong>布局</strong></div>
+            <div class="layout-presets" aria-label="布局预设">
+              <button class="layout-preset" type="button" data-columns="4" data-rows="2">2×4</button>
+              <button class="layout-preset" type="button" data-columns="5" data-rows="2">2×5</button>
+              <button class="layout-preset" type="button" data-columns="6" data-rows="2">2×6</button>
+              <button class="layout-preset" type="button" data-columns="7" data-rows="2">2×7</button>
+              <button class="layout-preset" type="button" data-columns="3" data-rows="3">3×3</button>
+              <button class="layout-preset active" type="button" data-columns="6" data-rows="3">自定义(3×6)</button>
+            </div>
+            <div class="range-field">
+              <span>每行数量</span>
+              <input id="gridColumnsInput" type="range" min="2" max="12" step="1" />
+              <output id="gridColumnsValue" for="gridColumnsInput">6</output>
+            </div>
+            <div class="range-field">
+              <span>每页行数</span>
+              <input id="gridRowsInput" type="range" min="1" max="8" step="1" />
+              <output id="gridRowsValue" for="gridRowsInput">3</output>
+            </div>
+          </section>
+
+          <section class="settings-group">
+            <div class="settings-group-head"><strong>图标</strong></div>
+            <label class="toggle-field"><span>隐藏图标名称</span><input id="showLabelsInput" type="checkbox" /><span class="toggle-switch" aria-hidden="true"></span></label>
+            <div class="range-field">
+              <span>图标圆角</span>
+              <input id="cardRadiusInput" type="range" min="0" max="50" step="1" />
+              <output id="cardRadiusValue" for="cardRadiusInput">24</output>
+            </div>
+            <div class="range-field">
+              <span>图标大小</span>
+              <input id="iconSizeInput" type="range" min="50" max="150" step="1" />
+              <output id="iconSizeValue" for="iconSizeInput">100%</output>
+            </div>
+            <div class="range-field">
+              <span>列间距</span>
+              <input id="columnGapInput" type="range" min="0" max="120" step="1" />
+              <output id="columnGapValue" for="columnGapInput">42px</output>
+            </div>
+            <div class="range-field">
+              <span>行间距</span>
+              <input id="rowGapInput" type="range" min="0" max="120" step="1" />
+              <output id="rowGapValue" for="rowGapInput">54px</output>
+            </div>
+          </section>
+
+          <section class="settings-group">
+            <div class="settings-group-head"><strong>搜索框</strong></div>
+            <label class="toggle-field"><span>隐藏搜索框</span><input id="searchBoxVisibleInput" type="checkbox" /><span class="toggle-switch" aria-hidden="true"></span></label>
+            <div class="range-field"><span>搜索框大小</span><input id="searchBoxWidthInput" type="range" min="50" max="100" value="75" /><output id="searchBoxWidthValue" for="searchBoxWidthInput">75%</output></div>
+            <div class="range-field"><span>搜索框圆角</span><input id="searchBoxRadiusInput" type="range" min="0" max="50" value="9" /><output id="searchBoxRadiusValue" for="searchBoxRadiusInput">9px</output></div>
+          </section>
+
+          <section class="settings-group">
+            <div class="settings-group-head"><strong>字体</strong></div>
+            <label class="toggle-field"><span>字体阴影</span><input type="checkbox" checked /><span class="toggle-switch" aria-hidden="true"></span></label>
+            <div class="range-field"><span>字体大小</span><input type="range" min="10" max="18" value="13" /><output>13</output></div>
+          </section>
+
+          <section class="settings-group">
+            <div class="settings-group-head"><strong>动画</strong></div>
+            <div class="segmented">
+              <button class="tool density-button active" type="button" data-density="standard">默认</button>
+              <button class="tool density-button" type="button" data-density="compact">紧凑</button>
+              <button class="tool density-button" type="button" data-density="large">放大</button>
+            </div>
+            <button id="resetDefaultPrefs" class="wide-action danger-action" type="button">重置-默认设置</button>
+          </section>
+
+          <section class="settings-group">
+            <div class="settings-group-head"><strong>插件操作</strong></div>
+            <button id="clipCurrent" class="wide-action" type="button">剪藏最近网页</button>
+            <button id="importBookmarks" class="wide-action" type="button">导入浏览器书签</button>
+            <button id="openSettings" class="wide-action" type="button">打开扩展设置</button>
+          </section>
         </div>
       </section>
 

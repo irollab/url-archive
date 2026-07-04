@@ -26,14 +26,22 @@ const editCancelEl = document.getElementById('editCancel') as HTMLButtonElement;
 const settingsPanelEl = document.getElementById('settingsPanel') as HTMLElement;
 const settingsToggleEl = document.getElementById('settingsToggle') as HTMLButtonElement;
 const settingsCloseEl = document.getElementById('settingsClose') as HTMLButtonElement;
-const backgroundImageInputEl = document.getElementById('backgroundImageInput') as HTMLInputElement;
 const backgroundImageFileEl = document.getElementById('backgroundImageFile') as HTMLInputElement;
-const uploadBackgroundImageEl = document.getElementById('uploadBackgroundImage') as HTMLButtonElement;
-const saveBackgroundImageEl = document.getElementById('saveBackgroundImage') as HTMLButtonElement;
+const wallpaperPreviewEl = document.getElementById('wallpaperPreview') as HTMLButtonElement;
+const cycleWallpaperEl = document.getElementById('cycleWallpaper') as HTMLButtonElement;
 const clearBackgroundImageEl = document.getElementById('clearBackgroundImage') as HTMLButtonElement;
+const wallpaperMaskInputEl = document.getElementById('wallpaperMaskInput') as HTMLInputElement;
+const wallpaperMaskValueEl = document.getElementById('wallpaperMaskValue') as HTMLOutputElement;
+const wallpaperBlurInputEl = document.getElementById('wallpaperBlurInput') as HTMLInputElement;
+const wallpaperBlurValueEl = document.getElementById('wallpaperBlurValue') as HTMLOutputElement;
 const webSearchFormEl = document.getElementById('webSearchForm') as HTMLFormElement;
 const searchEngineToggleEl = document.getElementById('searchEngineToggle') as HTMLButtonElement;
 const searchInputEl = document.getElementById('searchInput') as HTMLInputElement;
+const searchBoxVisibleInputEl = document.getElementById('searchBoxVisibleInput') as HTMLInputElement;
+const searchBoxWidthInputEl = document.getElementById('searchBoxWidthInput') as HTMLInputElement;
+const searchBoxWidthValueEl = document.getElementById('searchBoxWidthValue') as HTMLOutputElement;
+const searchBoxRadiusInputEl = document.getElementById('searchBoxRadiusInput') as HTMLInputElement;
+const searchBoxRadiusValueEl = document.getElementById('searchBoxRadiusValue') as HTMLOutputElement;
 const drawerSearchInputEl = document.getElementById('drawerSearchInput') as HTMLInputElement;
 const categoryListEl = document.getElementById('categoryList') as HTMLDivElement;
 const contentTitleEl = document.getElementById('contentTitle') as HTMLDivElement;
@@ -45,6 +53,7 @@ const gridColumnsInputEl = document.getElementById('gridColumnsInput') as HTMLIn
 const gridColumnsValueEl = document.getElementById('gridColumnsValue') as HTMLOutputElement;
 const gridRowsInputEl = document.getElementById('gridRowsInput') as HTMLInputElement;
 const gridRowsValueEl = document.getElementById('gridRowsValue') as HTMLOutputElement;
+const layoutPresetButtons = [...document.querySelectorAll<HTMLButtonElement>('.layout-preset')];
 const cardRadiusInputEl = document.getElementById('cardRadiusInput') as HTMLInputElement;
 const cardRadiusValueEl = document.getElementById('cardRadiusValue') as HTMLOutputElement;
 const iconSizeInputEl = document.getElementById('iconSizeInput') as HTMLInputElement;
@@ -68,6 +77,7 @@ const clipCurrentEl = document.getElementById('clipCurrent') as HTMLButtonElemen
 const aiRecallEl = document.getElementById('aiRecall') as HTMLButtonElement;
 const importButtons = [document.getElementById('importBookmarks') as HTMLButtonElement];
 const settingsButtons = [document.getElementById('openSettings') as HTMLButtonElement];
+const resetDefaultPrefsEl = document.getElementById('resetDefaultPrefs') as HTMLButtonElement;
 
 type Density = 'compact' | 'standard' | 'large';
 type Theme = 'light' | 'dark';
@@ -123,6 +133,8 @@ type Prefs = {
   theme: Theme;
   rightPanelCollapsed: boolean;
   backgroundImageUrl: string;
+  wallpaperMask: number;
+  wallpaperBlur: number;
   gridColumns: number;
   gridRows: number;
   cardRadius: number;
@@ -131,6 +143,9 @@ type Prefs = {
   rowGap: number;
   showLabels: boolean;
   galleryMode: boolean;
+  searchBoxVisible: boolean;
+  searchBoxWidth: number;
+  searchBoxRadius: number;
 };
 
 type RuntimeResponse<T> = {
@@ -143,17 +158,29 @@ const DEFAULT_PREFS: Prefs = {
   theme: 'light',
   rightPanelCollapsed: false,
   backgroundImageUrl: '',
-  gridColumns: 5,
-  gridRows: 2,
-  cardRadius: 26,
+  wallpaperMask: 58,
+  wallpaperBlur: 0,
+  gridColumns: 6,
+  gridRows: 3,
+  cardRadius: 24,
   iconSize: 100,
-  columnGap: 24,
-  rowGap: 30,
+  columnGap: 42,
+  rowGap: 54,
   showLabels: true,
   galleryMode: false,
+  searchBoxVisible: true,
+  searchBoxWidth: 75,
+  searchBoxRadius: 9,
 };
 
 const DEFAULT_BACKGROUND_IMAGE = 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=80';
+const BUILT_IN_WALLPAPERS = [
+  DEFAULT_BACKGROUND_IMAGE,
+  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2400&q=80',
+  'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=2400&q=80',
+  'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=2400&q=80',
+  'https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=2400&q=80',
+];
 const SEARCH_ENGINES: Record<SearchEngine, { label: string; url: string }> = {
   google: { label: 'G', url: 'https://www.google.com/search?q=' },
   bing: { label: 'B', url: 'https://www.bing.com/search?q=' },
@@ -459,15 +486,36 @@ function renderPageIndicator() {
     return;
   }
 
+  const pages = new Set<number>([0, totalPages - 1]);
+  for (let i = currentPage - 2; i <= currentPage + 2; i += 1) {
+    if (i >= 0 && i < totalPages) pages.add(i);
+  }
+
+  const items: Array<number | 'ellipsis'> = [];
+  let previous = -1;
+  for (const page of [...pages].sort((a, b) => a - b)) {
+    if (previous >= 0 && page - previous > 1) items.push('ellipsis');
+    items.push(page);
+    previous = page;
+  }
+
   pageIndicatorEl.replaceChildren(
-    ...Array.from({ length: totalPages }, (_, i) => {
+    ...items.map((item) => {
+      if (item === 'ellipsis') {
+        const ellipsis = document.createElement('span');
+        ellipsis.className = 'page-ellipsis';
+        ellipsis.textContent = '...';
+        ellipsis.setAttribute('aria-hidden', 'true');
+        return ellipsis;
+      }
+
       const dot = document.createElement('button');
       dot.type = 'button';
-      dot.className = `page-dot${i === currentPage ? ' active' : ''}`;
-      dot.textContent = String(i + 1);
-      dot.setAttribute('aria-label', `第 ${i + 1} 页`);
+      dot.className = `page-dot${item === currentPage ? ' active' : ''}`;
+      dot.textContent = String(item + 1);
+      dot.setAttribute('aria-label', `第 ${item + 1} 页，共 ${totalPages} 页`);
       dot.addEventListener('click', () => {
-        currentPage = i;
+        currentPage = item;
         refreshCardsPage();
       });
       return dot;
@@ -662,8 +710,7 @@ function bindEvents() {
   settingsToggleEl.addEventListener('click', () => {
     settingsPanelEl.hidden = !settingsPanelEl.hidden;
     if (!settingsPanelEl.hidden) {
-      backgroundImageInputEl.value = prefs.backgroundImageUrl;
-      backgroundImageInputEl.focus();
+      wallpaperPreviewEl.focus();
     }
   });
   settingsCloseEl.addEventListener('click', () => {
@@ -707,8 +754,20 @@ function bindEvents() {
     });
   }
 
+  for (const button of layoutPresetButtons) {
+    button.addEventListener('click', () => {
+      const columns = parseInt(button.dataset.columns ?? '', 10);
+      const rows = parseInt(button.dataset.rows ?? '', 10);
+      if (!Number.isFinite(columns) || !Number.isFinite(rows)) return;
+      currentPage = 0;
+      savePrefs({ gridColumns: columns, gridRows: rows });
+      refreshDashboard();
+    });
+  }
+
   themeToggleEl.addEventListener('click', () => {
-    savePrefs({ theme: prefs.theme === 'dark' ? 'light' : 'dark' });
+    const nextTheme = prefs.theme === 'dark' ? 'light' : 'dark';
+    savePrefs(nextTheme === 'dark' ? { theme: nextTheme, wallpaperMask: 68 } : { theme: nextTheme });
   });
 
   drawerToggleEl.addEventListener('click', () => {
@@ -733,7 +792,15 @@ function bindEvents() {
     scheduleDrawerClose();
   });
 
-  uploadBackgroundImageEl.addEventListener('click', () => backgroundImageFileEl.click());
+  wallpaperPreviewEl.addEventListener('click', () => backgroundImageFileEl.click());
+  cycleWallpaperEl.addEventListener('click', () => {
+    const current = isImageKey(prefs.backgroundImageUrl)
+      ? DEFAULT_BACKGROUND_IMAGE
+      : prefs.backgroundImageUrl || DEFAULT_BACKGROUND_IMAGE;
+    const index = BUILT_IN_WALLPAPERS.indexOf(current);
+    const next = BUILT_IN_WALLPAPERS[(index + 1 + BUILT_IN_WALLPAPERS.length) % BUILT_IN_WALLPAPERS.length];
+    savePrefs({ backgroundImageUrl: next === DEFAULT_BACKGROUND_IMAGE ? '' : next });
+  });
   backgroundImageFileEl.addEventListener('change', async () => {
     const file = backgroundImageFileEl.files?.[0];
     if (!file) return;
@@ -741,7 +808,6 @@ function bindEvents() {
       const dataUrl = await resizeImageFile(file, 2560, 1440, 0.85);
       const key = `background-${Date.now()}`;
       await saveImage(key, dataUrl);
-      backgroundImageInputEl.value = toImageKey(key);
       savePrefs({ backgroundImageUrl: toImageKey(key) });
     } catch (error) {
       setStatus(`背景图上传失败：${errorMessage(error)}`);
@@ -749,16 +815,24 @@ function bindEvents() {
     backgroundImageFileEl.value = '';
   });
 
-  saveBackgroundImageEl.addEventListener('click', () => {
-    savePrefs({ backgroundImageUrl: backgroundImageInputEl.value.trim() });
+  wallpaperMaskInputEl.addEventListener('input', () => {
+    const value = parseInt(wallpaperMaskInputEl.value, 10);
+    wallpaperMaskValueEl.value = `${value}%`;
+    savePrefs({ wallpaperMask: value });
   });
+
+  wallpaperBlurInputEl.addEventListener('input', () => {
+    const value = parseInt(wallpaperBlurInputEl.value, 10);
+    wallpaperBlurValueEl.value = `${value}%`;
+    savePrefs({ wallpaperBlur: value });
+  });
+
 
   clearBackgroundImageEl.addEventListener('click', async () => {
     const oldUrl = prefs.backgroundImageUrl;
     if (isImageKey(oldUrl)) {
       await deleteImage(imageKey(oldUrl)).catch(() => {});
     }
-    backgroundImageInputEl.value = '';
     savePrefs({ backgroundImageUrl: '' });
   });
 
@@ -779,7 +853,11 @@ function bindEvents() {
   });
 
   document.addEventListener('click', (event) => {
-    if ((event.target as HTMLElement).closest('.detail-menu, .detail-menu-button')) return;
+    const target = event.target as HTMLElement;
+    if (!settingsPanelEl.hidden && !target.closest('#settingsPanel, #settingsToggle')) {
+      settingsPanelEl.hidden = true;
+    }
+    if (target.closest('.detail-menu, .detail-menu-button')) return;
     closeDetailMenus();
   });
 
@@ -848,6 +926,33 @@ function bindEvents() {
     savePrefs({ galleryMode: galleryModeInputEl.checked });
     refreshDashboard();
   });
+
+  searchBoxVisibleInputEl.addEventListener('change', () => {
+    savePrefs({ searchBoxVisible: !searchBoxVisibleInputEl.checked });
+  });
+
+  searchBoxWidthInputEl.addEventListener('input', () => {
+    const value = parseInt(searchBoxWidthInputEl.value, 10);
+    searchBoxWidthValueEl.value = `${value}%`;
+    savePrefs({ searchBoxWidth: value });
+  });
+
+  searchBoxRadiusInputEl.addEventListener('input', () => {
+    const value = parseInt(searchBoxRadiusInputEl.value, 10);
+    searchBoxRadiusValueEl.value = `${value}px`;
+    savePrefs({ searchBoxRadius: value });
+  });
+
+  resetDefaultPrefsEl.addEventListener('click', async () => {
+    const oldUrl = prefs.backgroundImageUrl;
+    if (isImageKey(oldUrl)) {
+      await deleteImage(imageKey(oldUrl)).catch(() => {});
+    }
+    currentPage = 0;
+    await savePrefs({ ...DEFAULT_PREFS });
+    refreshDashboard();
+    setStatus('已恢复默认设置');
+  });
 }
 
 function openDrawerTemporarily() {
@@ -858,6 +963,7 @@ function openDrawerTemporarily() {
 }
 
 function scheduleDrawerClose() {
+  if (!editPanelEl.hidden) return;
   window.clearTimeout(drawerAutoCloseTimer);
   drawerAutoCloseTimer = window.setTimeout(() => {
     closeEditPanel();
@@ -880,18 +986,22 @@ async function applyPrefs() {
   appEl.classList.toggle('right-panel-open', !prefs.rightPanelCollapsed);
   rightPanelEl.classList.toggle('open', !prefs.rightPanelCollapsed);
   rightDrawerHotspotEl.hidden = !prefs.rightPanelCollapsed;
-  backgroundImageInputEl.value = prefs.backgroundImageUrl;
-
   const resolvedUrl = await resolveImageUrl(prefs.backgroundImageUrl);
   const imageUrl = resolvedUrl || DEFAULT_BACKGROUND_IMAGE;
   appEl.style.setProperty('--wallpaper-image', `url("${cssUrl(imageUrl)}")`);
+  appEl.style.setProperty('--wallpaper-mask', String(prefs.wallpaperMask / 100));
+  appEl.style.setProperty('--wallpaper-blur', `${Math.round(prefs.wallpaperBlur * 0.24)}px`);
+  appEl.style.setProperty('--wallpaper-blur-value', String(prefs.wallpaperBlur));
   appEl.style.setProperty('--grid-columns', String(prefs.gridColumns));
   appEl.style.setProperty('--grid-rows', String(prefs.gridRows));
   appEl.style.setProperty('--card-radius', `${prefs.cardRadius}px`);
   appEl.style.setProperty('--icon-size', String(prefs.iconSize / 100));
   appEl.style.setProperty('--column-gap', `${prefs.columnGap}px`);
   appEl.style.setProperty('--row-gap', `${prefs.rowGap}px`);
+  appEl.style.setProperty('--search-box-width', String(prefs.searchBoxWidth));
+  appEl.style.setProperty('--search-box-radius', `${prefs.searchBoxRadius}px`);
   appEl.classList.toggle('hide-labels', !prefs.showLabels);
+  appEl.classList.toggle('hide-search-box', !prefs.searchBoxVisible);
   appEl.classList.toggle('gallery-mode', prefs.galleryMode);
   domeGalleryEl.hidden = !prefs.galleryMode;
 
@@ -907,11 +1017,25 @@ async function applyPrefs() {
   columnGapValueEl.value = `${prefs.columnGap}px`;
   rowGapInputEl.value = String(prefs.rowGap);
   rowGapValueEl.value = `${prefs.rowGap}px`;
+  wallpaperMaskInputEl.value = String(prefs.wallpaperMask);
+  wallpaperMaskValueEl.value = `${prefs.wallpaperMask}%`;
+  wallpaperBlurInputEl.value = String(prefs.wallpaperBlur);
+  wallpaperBlurValueEl.value = `${prefs.wallpaperBlur}%`;
   showLabelsInputEl.checked = !prefs.showLabels;
   galleryModeInputEl.checked = prefs.galleryMode;
+  searchBoxVisibleInputEl.checked = !prefs.searchBoxVisible;
+  searchBoxWidthInputEl.value = String(prefs.searchBoxWidth);
+  searchBoxWidthValueEl.value = `${prefs.searchBoxWidth}%`;
+  searchBoxRadiusInputEl.value = String(prefs.searchBoxRadius);
+  searchBoxRadiusValueEl.value = `${prefs.searchBoxRadius}px`;
 
   for (const button of densityButtons) {
     button.classList.toggle('active', button.dataset.density === prefs.density);
+  }
+  for (const button of layoutPresetButtons) {
+    const columns = parseInt(button.dataset.columns ?? '', 10);
+    const rows = parseInt(button.dataset.rows ?? '', 10);
+    button.classList.toggle('active', columns === prefs.gridColumns && rows === prefs.gridRows);
   }
   updateSearchEngineButton();
 }
@@ -1253,7 +1377,7 @@ function folderName(path: string): string {
 }
 
 function normalizePrefs(value: Partial<Prefs>): Prefs {
-  return {
+  const normalized: Prefs = {
     density: value.density === 'compact' || value.density === 'large' ? value.density : 'standard',
     theme: value.theme === 'dark' ? 'dark' : 'light',
     rightPanelCollapsed: typeof value.rightPanelCollapsed === 'boolean'
@@ -1262,6 +1386,8 @@ function normalizePrefs(value: Partial<Prefs>): Prefs {
     backgroundImageUrl: typeof value.backgroundImageUrl === 'string'
       ? value.backgroundImageUrl.trim()
       : DEFAULT_PREFS.backgroundImageUrl,
+    wallpaperMask: clampInt(value.wallpaperMask, DEFAULT_PREFS.wallpaperMask, 0, 100),
+    wallpaperBlur: clampInt(value.wallpaperBlur, DEFAULT_PREFS.wallpaperBlur, 0, 100),
     gridColumns: clampInt(value.gridColumns, DEFAULT_PREFS.gridColumns, 2, 12),
     gridRows: clampInt(value.gridRows, DEFAULT_PREFS.gridRows, 1, 8),
     cardRadius: clampInt(value.cardRadius, DEFAULT_PREFS.cardRadius, 0, 50),
@@ -1270,7 +1396,27 @@ function normalizePrefs(value: Partial<Prefs>): Prefs {
     rowGap: clampInt(value.rowGap, DEFAULT_PREFS.rowGap, 0, 120),
     showLabels: typeof value.showLabels === 'boolean' ? value.showLabels : DEFAULT_PREFS.showLabels,
     galleryMode: typeof value.galleryMode === 'boolean' ? value.galleryMode : DEFAULT_PREFS.galleryMode,
+    searchBoxVisible: typeof value.searchBoxVisible === 'boolean' ? value.searchBoxVisible : DEFAULT_PREFS.searchBoxVisible,
+    searchBoxWidth: clampInt(value.searchBoxWidth, DEFAULT_PREFS.searchBoxWidth, 50, 100),
+    searchBoxRadius: clampInt(value.searchBoxRadius, DEFAULT_PREFS.searchBoxRadius, 0, 50),
   };
+  if (
+    normalized.gridColumns === 5 &&
+    normalized.gridRows === 2 &&
+    normalized.cardRadius === 26 &&
+    normalized.columnGap === 24 &&
+    normalized.rowGap === 30
+  ) {
+    return {
+      ...normalized,
+      gridColumns: DEFAULT_PREFS.gridColumns,
+      gridRows: DEFAULT_PREFS.gridRows,
+      cardRadius: DEFAULT_PREFS.cardRadius,
+      columnGap: DEFAULT_PREFS.columnGap,
+      rowGap: DEFAULT_PREFS.rowGap,
+    };
+  }
+  return normalized;
 }
 
 function clampInt(value: unknown, fallback: number, min: number, max: number): number {

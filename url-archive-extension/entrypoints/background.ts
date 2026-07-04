@@ -242,7 +242,7 @@ async function handleSearchClips(query: string, filter: ClipFilter, folder: stri
 
 async function handleDashboardData(query: string, folder: string) {
   const clips = await loadSavedClips();
-  return buildDashboardData(clips, { query, folder, limit: 80 });
+  return buildDashboardData(clips, { query, folder });
 }
 
 async function handleSavedClipStats() {

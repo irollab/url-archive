@@ -1,6 +1,8 @@
 :root {
   color-scheme: light dark;
   --wallpaper-image: url("https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=80");
+  --wallpaper-blur: 0px;
+  --wallpaper-mask: .58;
   --text: #f8fbff;
   --muted: rgba(248, 251, 255, .72);
   --panel: rgba(255, 255, 255, .9);
@@ -19,6 +21,8 @@
   --icon-size: 1;
   --column-gap: 24px;
   --row-gap: 30px;
+  --search-box-width: 75;
+  --search-box-radius: 9px;
 }
 
 * { box-sizing: border-box; }
@@ -59,13 +63,18 @@ button {
   background-image: var(--wallpaper-image);
   background-position: center;
   background-size: cover;
-  transform: scale(1.02);
+  filter: blur(var(--wallpaper-blur));
+  transform: scale(calc(1.02 + (var(--wallpaper-blur-value, 0) * .002)));
 }
 
 .scrim {
   background:
-    linear-gradient(180deg, rgba(5, 10, 18, .36), rgba(5, 10, 18, .58)),
-    radial-gradient(circle at 50% 28%, rgba(255, 255, 255, .12), transparent 38%);
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, calc(.1 + var(--wallpaper-mask) * .9)),
+      rgba(0, 0, 0, var(--wallpaper-mask))
+    ),
+    radial-gradient(circle at 50% 28%, rgba(255, 255, 255, calc((1 - var(--wallpaper-mask)) * .12)), transparent 38%);
 }
 
 .topbar {
@@ -139,6 +148,11 @@ button {
   border-color: rgba(15, 23, 42, .1);
 }
 
+.icon-tool > svg {
+  width: 22px;
+  height: 22px;
+}
+
 .panel-title,
 .content-title {
   font-weight: 850;
@@ -196,8 +210,8 @@ button {
   grid-template-columns: 1fr;
   justify-content: stretch;
   align-content: start;
-  min-height: calc(100vh - 190px);
-  padding: 78px 72px 180px;
+  min-height: calc(100vh - 80px);
+  padding: 96px 72px 154px;
   transition: padding .22s ease;
 }
 
@@ -213,14 +227,15 @@ button {
   display: grid;
   grid-template-columns: 64px minmax(180px, 580px) 64px;
   align-items: center;
-  width: min(720px, 100%);
-  height: 64px;
-  margin-bottom: 56px;
+  width: min(calc(var(--search-box-width) * 9.6px), 100%);
+  height: 54px;
+  margin-bottom: 52px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, .46);
-  border-radius: 20px;
+  border-radius: var(--search-box-radius);
   background: rgba(255, 255, 255, .92);
-  box-shadow: 0 20px 54px rgba(0, 0, 0, .24);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .22);
+  transition: width .18s ease, border-radius .18s ease, opacity .18s ease, transform .18s ease;
 }
 
 .engine-button,
@@ -235,7 +250,7 @@ button {
 
 .engine-button {
   font-size: 18px;
-  letter-spacing: -.02em;
+  letter-spacing: 0;
 }
 
 .search-submit {
@@ -245,7 +260,7 @@ button {
 }
 
 .search {
-  width: 100%;
+  width: min(1040px, 100%);
   height: 100%;
   border: 0;
   outline: 0;
@@ -256,6 +271,10 @@ button {
 
 .search::placeholder {
   color: #8a94a6;
+}
+
+.hide-search-box .search-shell {
+  display: none;
 }
 
 .content {
@@ -270,7 +289,7 @@ button {
   align-items: flex-end;
   justify-content: space-between;
   gap: 18px;
-  margin-bottom: 22px;
+  margin-bottom: 26px;
   color: var(--text);
 }
 
@@ -298,6 +317,8 @@ button {
   position: relative;
   overflow: hidden;
   min-height: 0;
+  width: 100%;
+  max-width: calc((96px * var(--grid-columns)) + (var(--column-gap) * (var(--grid-columns) - 1)));
 }
 
 .bookmark-grid {
@@ -310,9 +331,11 @@ button {
 .bookmark-page {
   flex: 0 0 100%;
   display: grid;
-  grid-template-columns: repeat(var(--grid-columns), minmax(0, 1fr));
-  grid-template-rows: repeat(var(--grid-rows), auto);
+  grid-template-columns: repeat(var(--grid-columns), 96px);
+  grid-template-rows: repeat(var(--grid-rows), 132px);
   gap: var(--row-gap) var(--column-gap);
+  justify-content: center;
+  align-items: start;
   min-width: 0;
   opacity: .5;
   transform: scale(.96);
@@ -329,12 +352,13 @@ button {
   display: grid;
   justify-items: center;
   gap: 10px;
+  width: 96px;
   min-width: 0;
   border: 0;
   background: transparent;
   color: var(--text);
   text-align: center;
-  padding-top: 8px;
+  padding-top: 0;
 }
 
 .bookmark-card.empty-card {
@@ -359,7 +383,7 @@ button {
   border-radius: var(--card-radius);
   background: rgba(255, 255, 255, .92);
   border: 1px solid rgba(255, 255, 255, .72);
-  box-shadow: 0 18px 34px rgba(0, 0, 0, .22);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .18);
   transform: scale(var(--icon-size));
   transition: transform .18s ease, box-shadow .18s ease, border-radius .18s ease;
   overflow: hidden;
@@ -415,7 +439,7 @@ button {
 .card-title {
   color: var(--text);
   font-weight: 780;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -461,12 +485,14 @@ button {
   justify-content: center;
   align-items: center;
   gap: 4px;
-  margin-top: 22px;
-  padding: 5px 6px;
-  min-height: 34px;
+  width: max-content;
+  max-width: min(420px, calc(100vw - 32px));
+  margin-top: 20px;
+  padding: 0;
+  min-height: 20px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, .14);
-  backdrop-filter: blur(6px);
+  background: transparent;
+  backdrop-filter: none;
 }
 
 .page-indicator:empty {
@@ -474,14 +500,15 @@ button {
 }
 
 .page-dot {
-  min-width: 34px;
-  height: 24px;
+  min-width: 9px;
+  width: 9px;
+  height: 9px;
   border-radius: 999px;
   border: 0;
   padding: 0;
   background: transparent;
-  color: var(--text);
-  font-size: 12px;
+  color: transparent;
+  font-size: 0;
   font-weight: 750;
   opacity: .62;
   transition: background .2s ease, color .2s ease, opacity .2s ease;
@@ -489,8 +516,18 @@ button {
 
 .page-dot.active {
   background: var(--text);
-  color: var(--ink);
+  color: transparent;
   opacity: 1;
+}
+
+.page-ellipsis {
+  min-width: 14px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 24px;
+  opacity: .68;
+  text-align: center;
 }
 
 .bookmark-drawer {
@@ -807,9 +844,33 @@ button {
   backdrop-filter: blur(20px);
 }
 
+.settings-panel {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(360px, calc(100vw - 40px));
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid rgba(15, 23, 42, .1);
+  border-radius: 0;
+  background: rgba(246, 246, 246, .96);
+}
+
 .settings-panel[hidden],
 .edit-panel[hidden] {
   display: none;
+}
+
+.edit-panel {
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  max-height: calc(100vh - 56px);
+  overflow: auto;
 }
 
 .edit-head,
@@ -820,15 +881,112 @@ button {
   gap: 10px;
 }
 
-.settings-group {
+.settings-tabs {
   display: grid;
-  gap: 9px;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(15, 23, 42, .08);
+  background: rgba(255, 255, 255, .72);
 }
 
+.settings-title {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.settings-scroll {
+  display: grid;
+  gap: 18px;
+  min-height: 0;
+  padding: 18px;
+  overflow: auto;
+}
+
+.settings-group {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, .06);
+  background: rgba(255, 255, 255, .82);
+}
+
+.settings-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-group-head strong,
 .settings-group label {
   color: var(--ink-muted);
   font-size: 12px;
   font-weight: 760;
+}
+
+.mini-action {
+  border: 0;
+  background: transparent;
+  color: #a8b0bc;
+  font-size: 12px;
+}
+
+.icon-mini-action {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  color: #445064;
+  background: rgba(15, 23, 42, .08);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.icon-mini-action:hover,
+.icon-mini-action:focus-visible {
+  background: rgba(15, 23, 42, .14);
+}
+
+.wallpaper-preview {
+  position: relative;
+  height: 92px;
+  border: 0;
+  border-radius: 4px;
+  background-image: var(--wallpaper-image);
+  background-position: center;
+  background-size: cover;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.wallpaper-preview::after {
+  content: "上传";
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  min-width: 34px;
+  height: 24px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, .72);
+  color: #445064;
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0;
+  transition: opacity .16s ease, transform .16s ease;
+}
+
+.wallpaper-preview:hover::after,
+.wallpaper-preview:focus-visible::after {
+  opacity: 1;
+  transform: translateY(1px);
 }
 
 .edit-field {
@@ -888,6 +1046,28 @@ button {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+}
+
+.layout-presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.layout-preset {
+  min-height: 44px;
+  border: 1px solid rgba(15, 23, 42, .1);
+  border-radius: 5px;
+  background: #f3f4f6;
+  color: #6b7483;
+  font-size: 12px;
+}
+
+.layout-preset.active {
+  border-color: #202938;
+  background: #fff;
+  color: #202938;
+  box-shadow: inset 0 0 0 1px #202938;
 }
 
 .range-field {
@@ -985,9 +1165,17 @@ button {
   padding: 10px 12px;
 }
 
+.danger-action {
+  border: 1px solid rgba(190, 18, 60, .2);
+  border-radius: 13px;
+  background: rgba(255, 241, 242, .92);
+  color: #be123c;
+  font-weight: 800;
+}
+
 .edit-panel input,
 .edit-panel select,
-.settings-panel input {
+.settings-panel input:not([type="checkbox"]):not([type="range"]) {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 13px;
@@ -1040,8 +1228,12 @@ button {
 
 .theme-light .scrim {
   background:
-    linear-gradient(180deg, rgba(4, 11, 22, .18), rgba(4, 11, 22, .44)),
-    radial-gradient(circle at 50% 28%, rgba(255, 255, 255, .12), transparent 38%);
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, calc(.08 + var(--wallpaper-mask) * .92)),
+      rgba(0, 0, 0, var(--wallpaper-mask))
+    ),
+    radial-gradient(circle at 50% 28%, rgba(255, 255, 255, calc((1 - var(--wallpaper-mask)) * .12)), transparent 38%);
 }
 
 .theme-dark {
@@ -1049,6 +1241,29 @@ button {
   --ink: #edf5ff;
   --ink-muted: #aab8ca;
   --line: rgba(255, 255, 255, .14);
+  --accent: #73a7ff;
+}
+
+.theme-dark .search-shell {
+  border-color: rgba(255, 255, 255, .18);
+  background: rgba(15, 23, 42, .86);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .36);
+}
+
+.theme-dark .search {
+  color: var(--ink);
+}
+
+.theme-dark .search::placeholder {
+  color: #8da0b8;
+}
+
+.theme-dark .engine-button {
+  color: #8ab4f8;
+}
+
+.theme-dark .search-submit {
+  color: #c7d2e2;
 }
 
 .theme-dark .bookmark-drawer,
@@ -1059,9 +1274,30 @@ button {
   color: var(--ink);
 }
 
+.theme-dark .settings-panel {
+  background: rgba(14, 20, 31, .96);
+  border-left-color: rgba(255, 255, 255, .12);
+}
+
+.theme-dark .settings-tabs {
+  background: rgba(20, 29, 43, .86);
+  border-bottom-color: rgba(255, 255, 255, .1);
+}
+
+.theme-dark .settings-title,
+.theme-dark .settings-group-head strong {
+  color: #edf5ff;
+}
+
+.theme-dark .settings-group {
+  border-color: rgba(255, 255, 255, .1);
+  background: rgba(255, 255, 255, .06);
+}
+
 .theme-dark .detail-item,
 .theme-dark .dock-action,
 .theme-dark .wide-action,
+.theme-dark .danger-action,
 .theme-dark .detail-menu,
 .theme-dark .tool,
 .theme-dark .edit-panel input,
@@ -1073,12 +1309,37 @@ button {
   border-color: rgba(255, 255, 255, .16);
 }
 
+.theme-dark .danger-action {
+  color: #fecdd3;
+  border-color: rgba(251, 113, 133, .34);
+}
+
+.theme-dark .wallpaper-preview::after {
+  background: rgba(15, 23, 42, .76);
+  color: #edf5ff;
+}
+
+.theme-dark .mini-action {
+  color: #aab8ca;
+}
+
+.theme-dark .icon-mini-action {
+  background: rgba(255, 255, 255, .12);
+  color: #edf5ff;
+}
+
 .theme-dark .detail-item small,
 .theme-dark .dock-action small,
 .theme-dark .bookmark-drawer-head span,
 .theme-dark .settings-group label,
 .theme-dark .empty-state {
   color: var(--ink-muted);
+}
+
+.theme-dark .detail-menu {
+  background: rgba(30, 41, 59, .96);
+  border-color: rgba(255, 255, 255, .22);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, .42);
 }
 
 .theme-dark .detail-menu button {
@@ -1160,7 +1421,8 @@ button {
   background: rgba(255, 255, 255, .14);
 }
 
-.theme-dark .page-dot {
+.theme-dark .page-dot,
+.theme-dark .page-ellipsis {
   color: var(--ink);
 }
 
@@ -1316,6 +1578,10 @@ button {
   user-select: none;
   -webkit-user-select: none;
   background: transparent;
+  cursor: grab;
+}
+.dome-gallery.dg-dragging .dg-main {
+  cursor: grabbing;
 }
 .dome-gallery .dg-stage {
   width: 100%;
@@ -1325,6 +1591,9 @@ button {
   perspective: calc(var(--radius) * 2);
   perspective-origin: 50% 50%;
   contain: layout paint size;
+  /* 顶/底 alpha 渐隐：俯仰拖动时球面上下渐隐到透明，融入壁纸而非被容器硬裁切 */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 18%, #000 82%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 18%, #000 82%, transparent 100%);
 }
 .dome-gallery .dg-sphere {
   transform: translateZ(calc(var(--radius) * -1));
@@ -1360,7 +1629,7 @@ button {
   border-radius: 22px;
   overflow: hidden;
   backface-visibility: hidden;
-  cursor: pointer;
+  cursor: inherit;
   -webkit-tap-highlight-color: transparent;
   transform: translateZ(0);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
