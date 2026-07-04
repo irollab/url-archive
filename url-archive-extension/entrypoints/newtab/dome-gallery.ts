@@ -91,6 +91,7 @@ export class DomeGallery {
   private focusedEl: HTMLElement | null = null;
   private opening = false;
   private openStartedAt = 0;
+  private onKey: (e: KeyboardEvent) => void = () => {};
 
   constructor(root: HTMLElement, options: DomeGalleryOptions) {
     this.root = root;
@@ -119,6 +120,7 @@ export class DomeGallery {
     if (this.inertiaRAF) cancelAnimationFrame(this.inertiaRAF);
     this.root.classList.remove('dg-scroll-lock');
     this.root.replaceChildren();
+    window.removeEventListener('keydown', this.onKey);
   }
 
   private buildScaffold() {
@@ -185,8 +187,78 @@ export class DomeGallery {
     this.openTile(item);
   }
 
-  // Task 4 会替换此占位实现
-  private openTile(_el: HTMLElement) {}
+  private buildCard(url: string, src: string, title: string, initial: string): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'dg-card';
+    card.style.background = colorForSeed(url);
+    card.innerHTML = `
+      ${src ? `<img class="dg-card-favicon" src="${escapeAttr(src)}" alt="" draggable="false" />` : `<span class="dg-card-initial">${escapeHtml(initial || '?')}</span>`}
+      <div class="dg-card-title">${escapeHtml(title || url)}</div>`;
+    return card;
+  }
+
+  private openTile(el: HTMLElement) {
+    if (this.opening) return;
+    this.opening = true;
+    this.openStartedAt = performance.now();
+    this.root.classList.add('dg-scroll-lock');
+    this.focusedEl = el;
+
+    const url = el.dataset.url || '';
+    const src = el.dataset.src || '';
+    const title = el.dataset.title || '';
+    const initial = el.dataset.initial || '';
+
+    const frameR = this.frame.getBoundingClientRect();
+    const mainR = this.main.getBoundingClientRect();
+    const tileR = el.getBoundingClientRect();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'dg-enlarge';
+    overlay.style.left = `${frameR.left - mainR.left}px`;
+    overlay.style.top = `${frameR.top - mainR.top}px`;
+    overlay.style.width = `${frameR.width}px`;
+    overlay.style.height = `${frameR.height}px`;
+    overlay.style.transformOrigin = 'top left';
+    overlay.appendChild(this.buildCard(url, src, title, initial));
+    overlay.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (performance.now() - this.openStartedAt < 250) return;
+      this.options.onOpen(url);
+    });
+    this.viewer.appendChild(overlay);
+
+    const tx0 = tileR.left - frameR.left;
+    const ty0 = tileR.top - frameR.top;
+    const sx0 = frameR.width > 0 ? tileR.width / frameR.width : 1;
+    const sy0 = frameR.height > 0 ? tileR.height / frameR.height : 1;
+    overlay.style.transform = `translate(${tx0}px, ${ty0}px) scale(${sx0}, ${sy0})`;
+    el.style.visibility = 'hidden';
+
+    requestAnimationFrame(() => {
+      overlay.style.transform = 'translate(0px, 0px) scale(1, 1)';
+      this.root.setAttribute('data-enlarging', 'true');
+    });
+  }
+
+  private closeEnlarged() {
+    if (performance.now() - this.openStartedAt < 250) return;
+    const el = this.focusedEl;
+    const overlay = this.viewer.querySelector('.dg-enlarge') as HTMLElement | null;
+    if (!overlay) return;
+    overlay.style.opacity = '0';
+    const cleanup = () => {
+      overlay.remove();
+      if (el) el.style.visibility = '';
+      this.focusedEl = null;
+      this.opening = false;
+      this.root.removeAttribute('data-enlarging');
+      this.root.classList.remove('dg-scroll-lock');
+    };
+    overlay.addEventListener('transitionend', cleanup, { once: true });
+    // 兜底：若无过渡事件，300ms 后强制清理
+    window.setTimeout(cleanup, 320);
+  }
 
   private applyTransform() {
     this.sphere.style.transform =
@@ -273,7 +345,11 @@ export class DomeGallery {
   }
 
   private bindClose() {
-    // Task 4 补充 scrim/Esc 关闭逻辑
+    this.scrim.addEventListener('click', () => this.closeEnlarged());
+    this.onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') this.closeEnlarged();
+    };
+    window.addEventListener('keydown', this.onKey);
   }
 }
 
