@@ -59,3 +59,233 @@ export function colorForSeed(seed: string): string {
   const hue = ((hash % 360) + 360) % 360;
   return `hsl(${hue}, 60%, 52%)`;
 }
+
+export type DomeGalleryOptions = {
+  onOpen: (url: string) => void;
+  segments?: number;
+  overlayBlurColor?: string;
+};
+
+const DEFAULT_SEGMENTS = 35;
+const MAX_VERTICAL_ROTATION_DEG = 5;
+const DRAG_SENSITIVITY = 20;
+
+export class DomeGallery {
+  private root: HTMLElement;
+  private options: Required<Pick<DomeGalleryOptions, 'onOpen'>> & DomeGalleryOptions;
+  private segments: number;
+  private main!: HTMLElement;
+  private stage!: HTMLElement;
+  private sphere!: HTMLElement;
+  private viewer!: HTMLElement;
+  private scrim!: HTMLElement;
+  private frame!: HTMLElement;
+  private ro: ResizeObserver;
+  private rotation = { x: 0, y: 0 };
+  private startRot = { x: 0, y: 0 };
+  private startPos: { x: number; y: number } | null = null;
+  private dragging = false;
+  private moved = false;
+  private inertiaRAF: number | null = null;
+  private lastDragEndAt = 0;
+  private focusedEl: HTMLElement | null = null;
+  private opening = false;
+  private openStartedAt = 0;
+
+  constructor(root: HTMLElement, options: DomeGalleryOptions) {
+    this.root = root;
+    this.options = options;
+    this.segments = options.segments ?? DEFAULT_SEGMENTS;
+    this.buildScaffold();
+    this.bindPointer();
+    this.bindClose();
+    this.ro = new ResizeObserver((entries) => this.onResize(entries[0].contentRect));
+    this.ro.observe(this.root);
+    this.applyTransform();
+  }
+
+  setItems(items: DomeItem[]): void {
+    const tiles = buildTiles(items, this.segments);
+    const rotY = 360 / this.segments / 2;
+    const rotX = 360 / this.segments / 2;
+    this.sphere.replaceChildren(
+      ...tiles.map((t) => this.renderTile(t, rotY, rotX)),
+    );
+    this.applyTransform();
+  }
+
+  destroy(): void {
+    this.ro.disconnect();
+    if (this.inertiaRAF) cancelAnimationFrame(this.inertiaRAF);
+    this.root.classList.remove('dg-scroll-lock');
+    this.root.replaceChildren();
+  }
+
+  private buildScaffold() {
+    this.root.classList.add('dome-gallery');
+    this.root.style.setProperty('--segments-x', String(this.segments));
+    this.root.style.setProperty('--segments-y', String(this.segments));
+    if (this.options.overlayBlurColor) {
+      this.root.style.setProperty('--overlay-blur-color', this.options.overlayBlurColor);
+    }
+    this.root.innerHTML = `
+      <main class="dg-main">
+        <div class="dg-stage"><div class="dg-sphere"></div></div>
+        <div class="dg-overlay"></div>
+        <div class="dg-edge dg-edge--top"></div>
+        <div class="dg-edge dg-edge--bottom"></div>
+        <div class="dg-viewer"><div class="dg-scrim"></div><div class="dg-frame"></div></div>
+      </main>`;
+    this.main = this.root.querySelector('.dg-main')!;
+    this.stage = this.root.querySelector('.dg-stage')!;
+    this.sphere = this.root.querySelector('.dg-sphere')!;
+    this.viewer = this.root.querySelector('.dg-viewer')!;
+    this.scrim = this.root.querySelector('.dg-scrim')!;
+    this.frame = this.root.querySelector('.dg-frame')!;
+  }
+
+  private renderTile(t: DomeTile, rotY: number, rotX: number): HTMLElement {
+    const item = document.createElement('div');
+    item.className = 'dg-item';
+    item.style.setProperty('--offset-x', String(t.x));
+    item.style.setProperty('--offset-y', String(t.y));
+    item.style.setProperty('--item-size-x', String(t.sizeX));
+    item.style.setProperty('--item-size-y', String(t.sizeY));
+    item.dataset.offsetX = String(t.x);
+    item.dataset.offsetY = String(t.y);
+    item.dataset.sizeX = String(t.sizeX);
+    item.dataset.sizeY = String(t.sizeY);
+    item.dataset.url = t.url;
+    item.dataset.title = t.title;
+    item.dataset.src = t.src;
+    item.dataset.initial = t.initial;
+
+    const tile = document.createElement('div');
+    tile.className = 'dg-tile';
+    tile.setAttribute('role', 'button');
+    tile.tabIndex = 0;
+    tile.setAttribute('aria-label', t.title || '打开书签');
+    tile.style.background = t.url ? colorForSeed(t.url) : 'transparent';
+    tile.innerHTML = t.src
+      ? `<img class="dg-favicon" src="${escapeAttr(t.src)}" alt="" draggable="false" />`
+      : (t.initial ? `<span class="dg-initial">${escapeHtml(t.initial)}</span>` : '');
+    tile.querySelector<HTMLImageElement>('.dg-favicon')?.addEventListener('error', function () {
+      this.replaceWith(Object.assign(document.createElement('span'), { className: 'dg-initial', textContent: t.initial || '?' }));
+    }, { once: true });
+    tile.addEventListener('click', () => this.onTileClick(item));
+    item.appendChild(tile);
+    return item;
+  }
+
+  private onTileClick(item: HTMLElement) {
+    if (this.dragging || this.moved) return;
+    if (performance.now() - this.lastDragEndAt < 80) return;
+    if (this.opening) return;
+    if (!item.dataset.url) return;
+    this.openTile(item);
+  }
+
+  // Task 4 会替换此占位实现
+  private openTile(_el: HTMLElement) {}
+
+  private applyTransform() {
+    this.sphere.style.transform =
+      `translateZ(calc(var(--radius) * -1)) rotateX(${this.rotation.x}deg) rotateY(${this.rotation.y}deg)`;
+  }
+
+  private onResize(cr: DOMRectReadOnly) {
+    const w = Math.max(1, cr.width);
+    const h = Math.max(1, cr.height);
+    const minDim = Math.min(w, h);
+    const aspect = w / h;
+    const basis = aspect >= 1.3 ? w : minDim;
+    let radius = basis * 0.5;
+    radius = Math.min(radius, h * 1.35);
+    radius = clamp(radius, 400, Infinity);
+    const viewerPad = Math.max(8, Math.round(minDim * 0.25));
+    this.root.style.setProperty('--radius', `${Math.round(radius)}px`);
+    this.root.style.setProperty('--viewer-pad', `${viewerPad}px`);
+    this.applyTransform();
+  }
+
+  private bindPointer() {
+    this.main.style.touchAction = 'none';
+    this.main.addEventListener('pointerdown', (e) => {
+      if (this.focusedEl) return;
+      this.stopInertia();
+      this.dragging = true;
+      this.moved = false;
+      this.startRot = { ...this.rotation };
+      this.startPos = { x: e.clientX, y: e.clientY };
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    });
+    this.main.addEventListener('pointermove', (e) => {
+      if (!this.dragging || !this.startPos || this.focusedEl) return;
+      const dx = e.clientX - this.startPos.x;
+      const dy = e.clientY - this.startPos.y;
+      if (!this.moved && dx * dx + dy * dy > 16) this.moved = true;
+      this.rotation = {
+        x: clamp(this.startRot.x - dy / DRAG_SENSITIVITY, -MAX_VERTICAL_ROTATION_DEG, MAX_VERTICAL_ROTATION_DEG),
+        y: wrapAngleSigned(this.startRot.y + dx / DRAG_SENSITIVITY),
+      };
+      this.applyTransform();
+    });
+    const end = (e: PointerEvent) => {
+      if (!this.dragging) return;
+      this.dragging = false;
+      if (this.moved && this.startPos) {
+        const vx = clamp(((e.clientX - this.startPos.x) / DRAG_SENSITIVITY) * 0.02, -1.2, 1.2);
+        const vy = clamp(((e.clientY - this.startPos.y) / DRAG_SENSITIVITY) * 0.02, -1.2, 1.2);
+        if (Math.abs(vx) > 0.005 || Math.abs(vy) > 0.005) this.startInertia(vx, vy);
+        this.lastDragEndAt = performance.now();
+      }
+    };
+    this.main.addEventListener('pointerup', end);
+    this.main.addEventListener('pointercancel', end);
+  }
+
+  private stopInertia() {
+    if (this.inertiaRAF) {
+      cancelAnimationFrame(this.inertiaRAF);
+      this.inertiaRAF = null;
+    }
+  }
+
+  private startInertia(vx: number, vy: number) {
+    let vX = clamp(vx, -1.4, 1.4) * 80;
+    let vY = clamp(vy, -1.4, 1.4) * 80;
+    const step = () => {
+      vX *= 0.965;
+      vY *= 0.965;
+      if (Math.abs(vX) < 0.01 && Math.abs(vY) < 0.01) {
+        this.inertiaRAF = null;
+        return;
+      }
+      this.rotation = {
+        x: clamp(this.rotation.x - vY / 200, -MAX_VERTICAL_ROTATION_DEG, MAX_VERTICAL_ROTATION_DEG),
+        y: wrapAngleSigned(this.rotation.y + vX / 200),
+      };
+      this.applyTransform();
+      this.inertiaRAF = requestAnimationFrame(step);
+    };
+    this.stopInertia();
+    this.inertiaRAF = requestAnimationFrame(step);
+  }
+
+  private bindClose() {
+    // Task 4 补充 scrim/Esc 关闭逻辑
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function escapeAttr(value: string): string {
+  return escapeHtml(value).replaceAll('`', '&#96;');
+}
