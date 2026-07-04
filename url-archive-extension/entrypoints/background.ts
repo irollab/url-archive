@@ -12,6 +12,7 @@ import {
   loadSavedClips,
   pickRevisitClip,
   recordRevisit,
+  deleteSavedClip,
   saveClipForRevisit,
   saveClipsForRevisit,
   searchSavedClips,
@@ -110,6 +111,12 @@ export default defineBackground(() => {
     if (msg?.type === 'UPDATE_SAVED_CLIP') {
       updateSavedClip(msg.update ?? {})
         .then((clip) => sendResponse({ ok: Boolean(clip), clip, error: clip ? undefined : '未找到要编辑的收藏' }))
+        .catch((e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+      return true;
+    }
+    if (msg?.type === 'DELETE_SAVED_CLIP') {
+      deleteSavedClip(msg.target ?? {})
+        .then((deleted) => sendResponse({ ok: deleted, deleted, error: deleted ? undefined : '未找到要删除的收藏' }))
         .catch((e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }));
       return true;
     }
