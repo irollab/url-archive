@@ -5,9 +5,11 @@
     <h2>URL Archive 设置</h2>
     <fieldset>
       <legend>AI（BYOK）</legend>
-      <label>API 端点 <input id="llmBaseUrl" style="width:100%" /></label>
+      <label>API 端点 <input id="llmBaseUrl" style="width:100%" placeholder="https://open.bigmodel.cn/api/paas/v4" /></label>
       <label>API Key <input id="llmApiKey" type="password" style="width:100%" /></label>
-      <label>模型 <input id="llmModel" style="width:100%" /></label>
+      <label>模型 <input id="llmModel" style="width:100%" placeholder="glm-5.2" /></label>
+      <button id="testAi" type="button">测试 AI</button>
+      <p id="aiStatus" style="font-size:12px;color:#555;min-height:18px;"></p>
     </fieldset>
     <fieldset>
       <legend>Obsidian Local REST API</legend>
