@@ -1,4 +1,5 @@
 import { loadSettings, saveSettings } from '@/lib/settings';
+import { enrichClip } from '@/lib/llm';
 import type { Settings } from '@/lib/types';
 
 const fields: (keyof Settings)[] = [
@@ -12,13 +13,34 @@ async function init() {
   }
 }
 
-document.getElementById('save')!.addEventListener('click', async () => {
+function collectSettings(): Settings {
   const partial: Partial<Settings> = {};
   for (const f of fields) {
     partial[f] = (document.getElementById(f) as HTMLInputElement).value as never;
   }
-  await saveSettings(partial);
+  return partial as Settings;
+}
+
+document.getElementById('save')!.addEventListener('click', async () => {
+  await saveSettings(collectSettings());
   document.getElementById('saved')!.textContent = ' 已保存';
+});
+
+document.getElementById('testAi')!.addEventListener('click', async () => {
+  const status = document.getElementById('aiStatus')!;
+  status.textContent = '测试中...';
+  try {
+    const result = await enrichClip({
+      url: 'https://example.com/test',
+      title: 'URL Archive AI 配置测试',
+      selection: '',
+      contentMarkdown: '这是一段用于测试 AI 摘要和标签生成的内容。浏览器收藏太多时，需要自动摘要、标签和搜索能力帮助找回有价值的网页。',
+      clippedAt: new Date().toISOString(),
+    }, collectSettings());
+    status.textContent = `测试成功：${result.summary || '已返回结果'}${result.tags.length ? `；标签：${result.tags.join('、')}` : ''}`;
+  } catch (error) {
+    status.textContent = `测试失败：${error instanceof Error ? error.message : String(error)}`;
+  }
 });
 
 init();

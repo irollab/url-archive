@@ -12,16 +12,23 @@ export interface AIResult {
   summary: string;
   highlights: string[];
   tags: string[];
+  keywords: string[];
+  aliases: string[];
+  intent: string;
 }
 
 /** 组装后准备写入 vault 的完整笔记 */
 export interface ClippedNote {
   url: string;
+  canonicalUrl: string;
   title: string;
   clipped: string;            // ISO
   domain: string;
   summary: string;
   tags: string[];
+  keywords: string[];
+  aliases: string[];
+  intent: string;
   why: string;
   status: 'unread' | 'read' | 'archived';
   revived: number;
@@ -47,4 +54,26 @@ export interface QueueItem {
   path: string;               // vault 内目标路径
   content: string;            // 完整 markdown
   enqueuedAt: string;         // ISO
+}
+
+/** 扩展本地维护的回访索引，不替代 Obsidian 正文 */
+export interface SavedClip {
+  url: string;
+  canonicalUrl?: string;
+  title: string;
+  domain: string;
+  path: string;
+  source?: 'clip' | 'bookmark';
+  folder?: string;
+  faviconUrl?: string;
+  summary: string;
+  tags: string[];
+  keywords: string[];
+  aliases: string[];
+  intent: string;
+  why: string;
+  clipped: string;
+  queued: boolean;
+  revived: number;
+  lastVisited: string;
 }

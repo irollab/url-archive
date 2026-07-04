@@ -1,11 +1,11 @@
 import { describe, test, expect, vi } from 'vitest';
-import { RestApiWriter } from './vault';
+import { RestApiWriter, VaultWriteError } from './vault';
 import type { Settings } from './types';
 
 const settings: Settings = {
   llmBaseUrl: '', llmApiKey: '', llmModel: '',
-  restApiUrl: 'http://127.0.0.1:27123',
-  restApiToken: 'tok-123',
+  restApiUrl: 'http://127.0.0.1:27123/',
+  restApiToken: ' tok-123 ',
   vaultFolder: 'URL Archive',
 };
 
@@ -23,9 +23,36 @@ describe('RestApiWriter', () => {
     expect(init.body).toBe('# hi');
   });
 
-  test('非 2xx 抛错', async () => {
+  test('Token 字段可兼容带 Bearer 前缀的输入', async () => {
+    const fetchFn = vi.fn().mockResolvedValue({ ok: true } as Response);
+    const writer = new RestApiWriter({ ...settings, restApiToken: ' Bearer tok-123 ' }, fetchFn);
+    await writer.write('URL Archive/note.md', '# hi');
+
+    const [, init] = fetchFn.mock.calls[0];
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok-123');
+  });
+
+  test('非 2xx 抛出带重试标记的错误', async () => {
     const fetchFn = vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response);
     const writer = new RestApiWriter(settings, fetchFn);
-    await expect(writer.write('p.md', 'x')).rejects.toThrow('写入 vault 失败');
+
+    await expect(writer.write('p.md', 'x')).rejects.toMatchObject({
+      message: '写入 vault 失败: 401',
+      retryable: false,
+    });
+  });
+
+  test('网络连接失败是可重试错误', async () => {
+    const fetchFn = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const writer = new RestApiWriter(settings, fetchFn);
+
+    await expect(writer.write('p.md', 'x')).rejects.toMatchObject({ retryable: true });
+  });
+
+  test('缺少 token 是不可重试配置错误', async () => {
+    const writer = new RestApiWriter({ ...settings, restApiToken: '' });
+
+    await expect(writer.write('p.md', 'x')).rejects.toBeInstanceOf(VaultWriteError);
+    await expect(writer.write('p.md', 'x')).rejects.toMatchObject({ retryable: false });
   });
 });

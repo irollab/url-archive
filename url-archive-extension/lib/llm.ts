@@ -2,19 +2,148 @@ import type { ClipData, AIResult, Settings } from './types';
 
 const SYSTEM_PROMPT =
   '你是收藏助手。根据网页内容，用简体中文返回严格 JSON：' +
-  '{"summary":"一句话摘要","highlights":["要点1","要点2","要点3"],"tags":["标签1","标签2"]}。' +
+  '{"summary":"一句话摘要","highlights":["要点1","要点2","要点3"],"tags":["标签1","标签2"],"keywords":["关键词1","关键词2"],"aliases":["用户可能搜索的别名1","别名2"],"intent":"什么场景下应该重新打开这条收藏"}。' +
   '不要输出 JSON 以外的任何内容。';
+
+const defaultFetch: typeof fetch = (...args) => fetch(...args);
+
+function normalizeBearerToken(token: string): string {
+  return token.trim().replace(/^Bearer\s+/i, '').trim();
+}
+
+function normalizeBaseUrl(url: string): string {
+  return url.trim()
+    .replace(/\/+$/, '')
+    .replace(/\/chat\/completions$/i, '');
+}
+
+type AIResultLike = Partial<AIResult> & {
+  摘要?: unknown;
+  要点?: unknown;
+  重点?: unknown;
+  标签?: unknown;
+  关键词?: unknown;
+  别名?: unknown;
+  搜索别名?: unknown;
+  回访场景?: unknown;
+  使用场景?: unknown;
+};
+
+function stringifyContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') return part;
+        if (part && typeof part === 'object' && 'text' in part) {
+          return String((part as { text?: unknown }).text ?? '');
+        }
+        return '';
+      })
+      .join('\n');
+  }
+  return content == null ? '' : String(content);
+}
+
+function extractResponseText(data: unknown): string {
+  const obj = data as {
+    output_text?: unknown;
+    choices?: { text?: unknown; message?: { content?: unknown } }[];
+    output?: { content?: { text?: unknown }[] }[];
+  };
+  return stringifyContent(
+    obj.output_text
+      ?? obj.choices?.[0]?.message?.content
+      ?? obj.choices?.[0]?.text
+      ?? obj.output?.[0]?.content?.[0]?.text
+      ?? '',
+  );
+}
+
+function throwIfProviderError(data: unknown): void {
+  if (!data || typeof data !== 'object') return;
+  const obj = data as { success?: unknown; code?: unknown; msg?: unknown; message?: unknown; error?: unknown };
+  if (obj.success === false || obj.error) {
+    const message = stringifyContent(obj.msg ?? obj.message ?? obj.error ?? '未知错误');
+    const code = obj.code == null ? '' : `${obj.code}: `;
+    throw new Error(`LLM 服务返回错误：${code}${message}`);
+  }
+}
+
+function parseAIContent(content: string): AIResultLike {
+  const trimmed = content.trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '');
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const objectMatch = trimmed.match(/\{[\s\S]*\}/);
+    if (!objectMatch) return {};
+    try {
+      return JSON.parse(objectMatch[0]);
+    } catch {
+      return {};
+    }
+  }
+}
+
+function hasUsableAIResult(result: AIResult): boolean {
+  return Boolean(
+    result.summary.trim()
+      || result.highlights.length
+      || result.tags.length
+      || result.keywords.length
+      || result.aliases.length
+      || result.intent.trim(),
+  );
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (typeof value === 'string') {
+    return value.split(/[、,，\n]/).map((item) => item.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function normalizeAIResult(parsed: AIResultLike): AIResult {
+  return {
+    summary: typeof parsed.summary === 'string'
+      ? parsed.summary
+      : typeof parsed.摘要 === 'string'
+        ? parsed.摘要
+        : '',
+    highlights: normalizeStringArray(parsed.highlights ?? parsed.要点 ?? parsed.重点),
+    tags: normalizeStringArray(parsed.tags ?? parsed.标签),
+    keywords: normalizeStringArray(parsed.keywords ?? parsed.关键词),
+    aliases: normalizeStringArray(parsed.aliases ?? parsed.别名 ?? parsed.搜索别名),
+    intent: typeof parsed.intent === 'string'
+      ? parsed.intent
+      : typeof parsed.回访场景 === 'string'
+        ? parsed.回访场景
+        : typeof parsed.使用场景 === 'string'
+          ? parsed.使用场景
+          : '',
+  };
+}
 
 export async function enrichClip(
   clip: ClipData,
   settings: Settings,
-  fetchFn: typeof fetch = fetch,
+  fetchFn: typeof fetch = defaultFetch,
 ): Promise<AIResult> {
-  const res = await fetchFn(`${settings.llmBaseUrl}/chat/completions`, {
+  const baseUrl = normalizeBaseUrl(settings.llmBaseUrl);
+  const apiKey = normalizeBearerToken(settings.llmApiKey);
+  if (!baseUrl) throw new Error('未配置 AI API 端点');
+  if (!apiKey) throw new Error('未配置 AI API Key');
+  if (!settings.llmModel.trim()) throw new Error('未配置 AI 模型');
+
+  const res = await fetchFn(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${settings.llmApiKey}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model: settings.llmModel,
@@ -37,17 +166,13 @@ export async function enrichClip(
   }
 
   const data = await res.json();
-  const content: string = data?.choices?.[0]?.message?.content ?? '{}';
-  let parsed: Partial<AIResult> = {};
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    parsed = {};
+  throwIfProviderError(data);
+  const content = extractResponseText(data);
+  const parsed = parseAIContent(content);
+  const result = normalizeAIResult(parsed);
+  if (!hasUsableAIResult(result)) {
+    const snippet = content.trim().slice(0, 240) || JSON.stringify(data).slice(0, 240);
+    throw new Error(`LLM 返回为空或格式不符合要求：${snippet}`);
   }
-
-  return {
-    summary: typeof parsed.summary === 'string' ? parsed.summary : '',
-    highlights: Array.isArray(parsed.highlights) ? parsed.highlights : [],
-    tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-  };
+  return result;
 }
