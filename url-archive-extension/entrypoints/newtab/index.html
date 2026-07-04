@@ -9,63 +9,184 @@
   </head>
   <body>
     <main id="app" class="newtab density-standard theme-light">
+      <div class="wallpaper" aria-hidden="true"></div>
+      <div class="scrim" aria-hidden="true"></div>
+
       <header class="topbar">
-        <div class="brand">URL Archive</div>
-        <input id="searchInput" class="search" type="search" placeholder="搜索书签、剪藏、分类、备注、语义线索" autocomplete="off" />
-        <div class="toolbar">
-          <button class="tool density-button" type="button" data-density="compact">紧凑</button>
-          <button class="tool density-button active" type="button" data-density="standard">标准</button>
-          <button class="tool density-button" type="button" data-density="large">大图标</button>
-          <button id="themeToggle" class="tool" type="button">深色</button>
-          <button id="clipCurrent" class="tool primary" type="button">剪藏</button>
-          <button id="importBookmarks" class="tool" type="button">导入</button>
-          <button id="openSettings" class="tool" type="button">设置</button>
+        <button class="brand" type="button" aria-label="回到全部收藏">
+          <span class="brand-mark">U</span>
+          <span>URL Archive</span>
+        </button>
+        <section id="status" class="status" aria-live="polite"></section>
+        <div class="topbar-actions">
+          <button id="themeToggle" class="icon-tool" type="button" aria-label="切换主题" title="切换主题">
+            <svg class="theme-icon-light" aria-hidden="true" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            <svg class="theme-icon-dark" aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+          <button id="settingsToggle" class="icon-tool" type="button" aria-label="设置" title="设置">
+            <span aria-hidden="true">⚙</span>
+          </button>
         </div>
       </header>
 
-      <section id="status" class="status" aria-live="polite"></section>
-
-      <div class="layout">
-        <aside class="sidebar">
-          <div class="panel-title">分类</div>
-          <div id="categoryList" class="category-list"></div>
-        </aside>
+      <section class="stage" aria-label="新标签页">
+        <form id="webSearchForm" class="search-shell" role="search">
+          <button id="searchEngineToggle" class="engine-button" type="button" title="切换搜索引擎">G</button>
+          <input id="searchInput" class="search" type="search" placeholder="搜索网页或收藏" autocomplete="off" />
+          <button class="search-submit" type="submit" aria-label="网页搜索">⌕</button>
+        </form>
 
         <section class="content">
           <div class="content-head">
-            <div id="contentTitle" class="content-title">全部收藏</div>
-            <button id="aiRecall" class="ai-recall" type="button">AI 找回</button>
-            <button id="rightDrawerToggle" class="drawer-toggle" type="button">功能</button>
+            <div>
+              <div id="contentTitle" class="content-title">全部收藏</div>
+              <p id="contentHint" class="content-hint">常用收藏会在这里快速打开，输入关键词可即时筛选。</p>
+            </div>
+            <button id="aiRecall" class="glass-button" type="button">AI 找回</button>
           </div>
-          <div id="cards" class="bookmark-grid"></div>
+          <div class="bookmark-grid-viewport" id="cardsViewport">
+            <div id="cards" class="bookmark-grid"></div>
+          </div>
+          <div id="domeGallery" class="dome-gallery" hidden></div>
+          <div id="pageIndicator" class="page-indicator" aria-label="分页"></div>
         </section>
+      </section>
 
-        <aside id="rightPanel" class="right-panel">
-          <section class="widget">
-            <h2>今日回访</h2>
-            <div id="revisitWidget" class="widget-body"></div>
+      <aside id="rightPanel" class="bookmark-drawer" aria-label="书签">
+        <div class="bookmark-drawer-head">
+          <div>
+            <strong>书签</strong>
+            <span>分类与详细书签</span>
+          </div>
+          <button id="rightDrawerToggle" class="icon-tool subtle" type="button" aria-label="收起书签栏">›</button>
+        </div>
+        <div class="bookmark-drawer-body">
+          <nav class="drawer-category-pane" aria-label="书签分类">
+            <div id="categoryList" class="category-list"></div>
+          </nav>
+          <section class="drawer-detail-pane" aria-label="书签列表">
+            <div class="drawer-search">
+              <input id="drawerSearchInput" type="search" placeholder="搜索书签" autocomplete="off" />
+              <span aria-hidden="true">⌕</span>
+            </div>
+            <div id="detailList" class="detail-list"></div>
           </section>
-          <section class="widget">
-            <h2>最近剪藏</h2>
-            <div id="recentWidget" class="widget-body"></div>
-          </section>
-          <section class="widget">
-            <h2>插件操作</h2>
-            <button id="rightImport" class="wide-action" type="button">导入浏览器书签</button>
-            <button id="rightSettings" class="wide-action" type="button">打开设置</button>
-          </section>
-        </aside>
-      </div>
+        </div>
+      </aside>
+      <button id="rightDrawerHotspot" class="drawer-hotspot" type="button" aria-label="打开书签栏">‹</button>
+
+      <section class="bottom-dock" aria-label="回访与剪藏">
+        <article class="dock-card">
+          <h2>今日回访</h2>
+          <div id="revisitWidget" class="widget-body"></div>
+        </article>
+        <article class="dock-card">
+          <h2>最近剪藏</h2>
+          <div id="recentWidget" class="widget-body"></div>
+        </article>
+      </section>
+
+      <section id="settingsPanel" class="settings-panel" hidden>
+        <div class="edit-head">
+          <strong>设置</strong>
+          <button id="settingsClose" class="icon-button" type="button" aria-label="关闭设置">×</button>
+        </div>
+        <div class="settings-group">
+          <label>背景图</label>
+          <div class="inline-control">
+            <input id="backgroundImageInput" type="url" placeholder="图片 URL 或上传图片" />
+            <input id="backgroundImageFile" type="file" accept="image/*" hidden />
+            <button id="uploadBackgroundImage" class="tool" type="button">上传</button>
+            <button id="saveBackgroundImage" class="tool primary" type="button">应用</button>
+          </div>
+          <button id="clearBackgroundImage" class="tool" type="button">恢复默认背景</button>
+        </div>
+        <div class="settings-group">
+          <label>显示</label>
+          <div class="segmented">
+            <button class="tool density-button" type="button" data-density="compact">紧凑</button>
+            <button class="tool density-button active" type="button" data-density="standard">标准</button>
+            <button class="tool density-button" type="button" data-density="large">大图标</button>
+          </div>
+        </div>
+        <div class="settings-group">
+          <label>布局</label>
+          <div class="range-field">
+            <span>每行数量</span>
+            <input id="gridColumnsInput" type="range" min="2" max="12" step="1" />
+            <output id="gridColumnsValue" for="gridColumnsInput">5</output>
+          </div>
+          <div class="range-field">
+            <span>每页行数</span>
+            <input id="gridRowsInput" type="range" min="1" max="8" step="1" />
+            <output id="gridRowsValue" for="gridRowsInput">2</output>
+          </div>
+          <div class="range-field">
+            <span>图标圆角</span>
+            <input id="cardRadiusInput" type="range" min="0" max="50" step="1" />
+            <output id="cardRadiusValue" for="cardRadiusInput">26</output>
+          </div>
+          <div class="range-field">
+            <span>图标大小</span>
+            <input id="iconSizeInput" type="range" min="50" max="150" step="1" />
+            <output id="iconSizeValue" for="iconSizeInput">100%</output>
+          </div>
+          <div class="range-field">
+            <span>列间距</span>
+            <input id="columnGapInput" type="range" min="0" max="120" step="1" />
+            <output id="columnGapValue" for="columnGapInput">24px</output>
+          </div>
+          <div class="range-field">
+            <span>行间距</span>
+            <input id="rowGapInput" type="range" min="0" max="120" step="1" />
+            <output id="rowGapValue" for="rowGapInput">30px</output>
+          </div>
+          <label class="toggle-field">
+            <span>画廊模式</span>
+            <input id="galleryModeInput" type="checkbox" />
+            <span class="toggle-switch" aria-hidden="true"></span>
+          </label>
+          <label class="toggle-field">
+            <span>隐藏图标名称</span>
+            <input id="showLabelsInput" type="checkbox" />
+            <span class="toggle-switch" aria-hidden="true"></span>
+          </label>
+        </div>
+        <div class="settings-group">
+          <label>插件操作</label>
+          <button id="clipCurrent" class="wide-action" type="button">剪藏最近网页</button>
+          <button id="importBookmarks" class="wide-action" type="button">导入浏览器书签</button>
+          <button id="openSettings" class="wide-action" type="button">打开扩展设置</button>
+        </div>
+      </section>
 
       <section id="editPanel" class="edit-panel" hidden>
         <div class="edit-head">
           <strong>编辑收藏</strong>
           <button id="editClose" class="icon-button" type="button" aria-label="关闭编辑">×</button>
         </div>
-        <input id="editTitle" type="text" placeholder="标题" />
-        <input id="editFolder" type="text" placeholder="分类，例如：书签栏 / 工作 / AI" />
-        <input id="editTags" type="text" placeholder="标签，用逗号分隔" />
-        <textarea id="editWhy" rows="3" placeholder="备注"></textarea>
+        <label class="edit-field">
+          <span>名称</span>
+          <input id="editTitle" type="text" placeholder="收藏名称" />
+        </label>
+        <label class="edit-field">
+          <span>收藏夹栏</span>
+          <select id="editFolder"></select>
+        </label>
+        <div class="edit-field">
+          <span>图标</span>
+          <div class="icon-edit-row">
+            <div id="editIconPreview" class="icon-edit-preview"></div>
+            <div class="icon-edit-inputs">
+              <input id="editFaviconUrl" type="url" placeholder="图标 URL" />
+              <input id="editFaviconFile" type="file" accept="image/*" hidden />
+              <div class="icon-edit-actions">
+                <button id="uploadFavicon" class="tool" type="button">上传</button>
+                <button id="editClearFavicon" class="tool" type="button">恢复默认图标</button>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="edit-actions">
           <button id="editSave" class="tool primary" type="button">保存</button>
           <button id="editCancel" class="tool" type="button">取消</button>

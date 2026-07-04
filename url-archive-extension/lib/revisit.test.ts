@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
+  deleteSavedClip,
   getSavedClipStats,
   getBookmarkFolders,
   loadSavedClips,
@@ -197,6 +198,17 @@ describe('revisit', () => {
       why: '常用工具',
     });
     expect(getBookmarkFolders(await loadSavedClips()).map((folder) => folder.path)).toContain('书签栏 / 工作 / AI');
+  });
+
+  test('可删除保存的收藏', async () => {
+    await saveClipForRevisit(clip({ url: 'https://example.com/a', title: 'A' }));
+    await saveClipForRevisit(clip({ url: 'https://example.com/b', title: 'B' }));
+
+    await expect(deleteSavedClip({ url: 'https://example.com/a' })).resolves.toBe(true);
+    await expect(loadSavedClips()).resolves.toMatchObject([
+      { url: 'https://example.com/b', title: 'B' },
+    ]);
+    await expect(deleteSavedClip({ url: 'https://example.com/missing' })).resolves.toBe(false);
   });
 
   test('统计剪藏、书签、暂存和回访数量', () => {

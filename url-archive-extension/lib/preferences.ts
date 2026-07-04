@@ -7,12 +7,30 @@ export interface NewTabPrefs {
   density: NewTabDensity;
   theme: NewTabTheme;
   rightPanelCollapsed: boolean;
+  backgroundImageUrl: string;
+  gridColumns: number;
+  gridRows: number;
+  cardRadius: number;
+  iconSize: number;
+  columnGap: number;
+  rowGap: number;
+  showLabels: boolean;
+  galleryMode: boolean;
 }
 
 const DEFAULT_PREFS: NewTabPrefs = {
   density: 'standard',
   theme: 'light',
   rightPanelCollapsed: false,
+  backgroundImageUrl: '',
+  gridColumns: 5,
+  gridRows: 2,
+  cardRadius: 26,
+  iconSize: 100,
+  columnGap: 24,
+  rowGap: 30,
+  showLabels: true,
+  galleryMode: false,
 };
 
 export async function loadNewTabPrefs(): Promise<NewTabPrefs> {
@@ -41,7 +59,26 @@ export function normalizePrefs(value: unknown): NewTabPrefs {
     rightPanelCollapsed: typeof raw.rightPanelCollapsed === 'boolean'
       ? raw.rightPanelCollapsed
       : DEFAULT_PREFS.rightPanelCollapsed,
+    backgroundImageUrl: typeof raw.backgroundImageUrl === 'string'
+      ? raw.backgroundImageUrl.trim()
+      : DEFAULT_PREFS.backgroundImageUrl,
+    gridColumns: positiveInt(raw.gridColumns, DEFAULT_PREFS.gridColumns, 2, 12),
+    gridRows: positiveInt(raw.gridRows, DEFAULT_PREFS.gridRows, 1, 8),
+    cardRadius: positiveInt(raw.cardRadius, DEFAULT_PREFS.cardRadius, 0, 50),
+    iconSize: positiveInt(raw.iconSize, DEFAULT_PREFS.iconSize, 50, 150),
+    columnGap: positiveInt(raw.columnGap, DEFAULT_PREFS.columnGap, 0, 120),
+    rowGap: positiveInt(raw.rowGap, DEFAULT_PREFS.rowGap, 0, 120),
+    showLabels: typeof raw.showLabels === 'boolean' ? raw.showLabels : DEFAULT_PREFS.showLabels,
+    galleryMode: typeof raw.galleryMode === 'boolean' ? raw.galleryMode : DEFAULT_PREFS.galleryMode,
   };
+}
+
+function positiveInt(value: unknown, fallback: number, min: number, max: number): number {
+  const n = typeof value === 'number' ? value : parseInt(String(value), 10);
+  if (Number.isNaN(n) || !Number.isFinite(n)) return fallback;
+  const rounded = Math.round(n);
+  if (rounded < min || rounded > max) return fallback;
+  return rounded;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

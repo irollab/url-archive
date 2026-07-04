@@ -30,9 +30,15 @@ export interface SavedClipUpdate {
   canonicalUrl?: string;
   title?: string;
   folder?: string;
+  faviconUrl?: string;
   tags?: string[];
   why?: string;
   summary?: string;
+}
+
+export interface SavedClipDelete {
+  url: string;
+  canonicalUrl?: string;
 }
 
 export async function loadSavedClips(): Promise<SavedClip[]> {
@@ -95,6 +101,7 @@ export async function updateSavedClip(update: SavedClipUpdate): Promise<SavedCli
     ...current,
     title: cleanOptional(update.title) ?? current.title,
     folder: cleanOptional(update.folder) ?? current.folder,
+    faviconUrl: cleanOptional(update.faviconUrl) ?? current.faviconUrl,
     tags: update.tags ? uniqueTags(update.tags) : current.tags,
     why: cleanOptional(update.why) ?? current.why,
     summary: cleanOptional(update.summary) ?? current.summary,
@@ -103,6 +110,15 @@ export async function updateSavedClip(update: SavedClipUpdate): Promise<SavedCli
   next[index] = nextClip;
   await chrome.storage.local.set({ [KEY]: next });
   return nextClip;
+}
+
+export async function deleteSavedClip(target: SavedClipDelete): Promise<boolean> {
+  const clips = await loadSavedClips();
+  const targetKey = target.canonicalUrl || target.url;
+  const next = clips.filter((clip) => clipKey(clip) !== targetKey);
+  if (next.length === clips.length) return false;
+  await chrome.storage.local.set({ [KEY]: next });
+  return true;
 }
 
 function isSameClip(a: SavedClip, b: SavedClip): boolean {
