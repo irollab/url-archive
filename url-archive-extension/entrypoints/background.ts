@@ -5,7 +5,7 @@ import { ClipQueue } from '@/lib/queue';
 import { captureClip } from '@/lib/capture';
 import { clipsFromBookmarkTree } from '@/lib/bookmarks';
 import { buildDashboardData } from '@/lib/dashboard';
-import { loadNewTabPrefs, saveNewTabPrefs } from '@/lib/preferences';
+import { loadNewTabPrefs, replaceNewTabPrefs } from '@/lib/preferences';
 import {
   getSavedClipStats,
   getBookmarkFolders,
@@ -19,6 +19,7 @@ import {
   updateSavedClip,
 } from '@/lib/revisit';
 import type { ClipData } from '@/lib/types';
+import type { NewTabPrefs } from '@/lib/preferences';
 
 type ExtractResult = {
   title: string;
@@ -27,6 +28,7 @@ type ExtractResult = {
 };
 
 const CONTENT_SCRIPT_FILE = 'content-scripts/content.js';
+let newTabPrefsSaveQueue: Promise<unknown> = Promise.resolve();
 
 export default defineBackground(() => {
   const queue = new ClipQueue();
@@ -40,6 +42,12 @@ export default defineBackground(() => {
         .then((r) => sendResponse({ ok: true, ...r }))
         .catch((e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }));
       return true; // 异步
+    }
+    if (msg?.type === 'CAPTURE_LAST_ACTIVE') {
+      handleCaptureLastActive(msg.why ?? '', queue)
+        .then((r) => sendResponse({ ok: true, ...r }))
+        .catch((e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+      return true;
     }
     if (msg?.type === 'SUGGEST_REVISIT') {
       handleSuggestRevisit()
@@ -76,7 +84,7 @@ export default defineBackground(() => {
       return true;
     }
     if (msg?.type === 'SAVE_NEW_TAB_PREFS') {
-      saveNewTabPrefs(msg.update ?? {})
+      handleSaveNewTabPrefs(msg.prefs ?? msg.update ?? {})
         .then((prefs) => sendResponse({ ok: true, prefs }))
         .catch((e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }));
       return true;
@@ -156,10 +164,28 @@ async function requestExtract(tab: chrome.tabs.Tab): Promise<ExtractResult> {
 }
 
 async function handleCapture(why: string, queue: ClipQueue) {
-  const settings = await loadSettings();
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) throw new Error('无法获取当前标签页');
+  return handleCaptureFromTab(tab, why, queue, '无法获取当前标签页');
+}
 
+async function handleCaptureLastActive(why: string, queue: ClipQueue) {
+  const tab = await findMostRecentCapturableTab();
+  return handleCaptureFromTab(
+    tab,
+    why,
+    queue,
+    '没有找到可剪藏的最近网页：请先打开一个普通 http/https 页面',
+  );
+}
+
+async function handleCaptureFromTab(
+  tab: chrome.tabs.Tab | undefined,
+  why: string,
+  queue: ClipQueue,
+  missingMessage: string,
+) {
+  const settings = await loadSettings();
+  if (!tab?.id) throw new Error(missingMessage);
   const extract = await requestExtract(tab);
 
   const clip: ClipData = {
@@ -178,6 +204,19 @@ async function handleCapture(why: string, queue: ClipQueue) {
   });
   await saveClipForRevisit(result.savedClip);
   return result;
+}
+
+async function findMostRecentCapturableTab() {
+  const tabs = await chrome.tabs.query({ currentWindow: true });
+  return tabs
+    .filter((tab) => tab.id != null && canInjectIntoTab(tab.url))
+    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
+}
+
+async function handleSaveNewTabPrefs(prefs: NewTabPrefs) {
+  const save = newTabPrefsSaveQueue.then(() => replaceNewTabPrefs(prefs));
+  newTabPrefsSaveQueue = save.catch(() => undefined);
+  return save;
 }
 
 async function handleSuggestRevisit() {

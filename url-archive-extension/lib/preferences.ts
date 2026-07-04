@@ -27,6 +27,12 @@ export async function saveNewTabPrefs(update: Partial<NewTabPrefs>): Promise<New
   return next;
 }
 
+export async function replaceNewTabPrefs(value: NewTabPrefs): Promise<NewTabPrefs> {
+  const next = normalizePrefs(value);
+  await chrome.storage.local.set({ [KEY]: next });
+  return next;
+}
+
 export function normalizePrefs(value: unknown): NewTabPrefs {
   const raw = isRecord(value) ? value : {};
   return {

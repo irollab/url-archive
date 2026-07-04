@@ -102,6 +102,7 @@ let searchTimer: number | undefined;
 let dashboardRequestSeq = 0;
 let prefsSaveSeq = 0;
 let importingBookmarks = false;
+let clippingRecentPage = false;
 
 init();
 
@@ -317,7 +318,7 @@ function bindEvents() {
   }
 
   clipCurrentEl.addEventListener('click', () => {
-    setStatus('请使用扩展按钮在当前网页剪藏；新标签页没有可剪藏正文。');
+    captureRecentPage();
   });
 
   aiRecallEl.addEventListener('click', () => {
@@ -345,12 +346,13 @@ async function savePrefs(update: Partial<Prefs>) {
   const requestId = ++prefsSaveSeq;
   const previousPrefs = { ...prefs };
   prefs = normalizePrefs({ ...prefs, ...update });
+  const nextPrefs = { ...prefs };
   applyPrefs();
 
   try {
     const res = await chrome.runtime.sendMessage({
       type: 'SAVE_NEW_TAB_PREFS',
-      update,
+      prefs: nextPrefs,
     }) as RuntimeResponse<{ prefs?: Prefs }>;
 
     if (!res?.ok || !res.prefs) {
@@ -367,6 +369,33 @@ async function savePrefs(update: Partial<Prefs>) {
       applyPrefs();
       setStatus(`偏好设置保存失败：${errorMessage(error)}`);
     }
+  }
+}
+
+async function captureRecentPage() {
+  if (clippingRecentPage) return;
+
+  clippingRecentPage = true;
+  clipCurrentEl.disabled = true;
+  setStatus('正在剪藏最近浏览的网页...');
+
+  try {
+    const res = await chrome.runtime.sendMessage({
+      type: 'CAPTURE_LAST_ACTIVE',
+      why: '',
+    }) as RuntimeResponse<{ queued?: boolean; path?: string }>;
+
+    if (!res?.ok) {
+      throw new Error(res?.error ?? '剪藏失败');
+    }
+
+    await refreshDashboard();
+    setStatus(res.queued ? 'Obsidian 不可用，已暂存，恢复后自动写入' : '已剪藏最近浏览的网页');
+  } catch (error) {
+    setStatus(`剪藏失败：${errorMessage(error)}`);
+  } finally {
+    clippingRecentPage = false;
+    clipCurrentEl.disabled = false;
   }
 }
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { loadNewTabPrefs, saveNewTabPrefs } from './preferences';
+import { loadNewTabPrefs, replaceNewTabPrefs, saveNewTabPrefs } from './preferences';
 
 let store: Record<string, unknown>;
 
@@ -30,6 +30,16 @@ describe('new tab preferences', () => {
       density: 'compact',
       theme: 'dark',
       rightPanelCollapsed: true,
+    });
+  });
+
+  test('replaces preferences with a normalized full snapshot', async () => {
+    await saveNewTabPrefs({ density: 'compact', theme: 'dark', rightPanelCollapsed: true });
+    await replaceNewTabPrefs({ density: 'large', theme: 'light', rightPanelCollapsed: false });
+    await expect(loadNewTabPrefs()).resolves.toEqual({
+      density: 'large',
+      theme: 'light',
+      rightPanelCollapsed: false,
     });
   });
 
