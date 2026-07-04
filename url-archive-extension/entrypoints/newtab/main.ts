@@ -893,6 +893,7 @@ async function applyPrefs() {
   appEl.style.setProperty('--row-gap', `${prefs.rowGap}px`);
   appEl.classList.toggle('hide-labels', !prefs.showLabels);
   appEl.classList.toggle('gallery-mode', prefs.galleryMode);
+  domeGalleryEl.hidden = !prefs.galleryMode;
 
   gridColumnsInputEl.value = String(prefs.gridColumns);
   gridColumnsValueEl.value = String(prefs.gridColumns);
