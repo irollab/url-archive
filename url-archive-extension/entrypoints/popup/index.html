@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>剪藏到 Obsidian</title>
+    <meta name="manifest.type" content="browser_action" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="card">
+      <textarea id="why" placeholder="为什么留它？（可选）" rows="2"></textarea>
+      <button id="clip">剪藏到 Obsidian</button>
+      <p id="status" class="status"></p>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

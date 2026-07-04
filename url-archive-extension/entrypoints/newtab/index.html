@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>URL Archive</title>
+    <meta name="manifest.type" content="newtab" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main id="app" class="newtab density-standard theme-light">
+      <header class="topbar">
+        <div class="brand">URL Archive</div>
+        <input id="searchInput" class="search" type="search" placeholder="搜索书签、剪藏、分类、备注、语义线索" autocomplete="off" />
+        <div class="toolbar">
+          <button class="tool density-button" type="button" data-density="compact">紧凑</button>
+          <button class="tool density-button active" type="button" data-density="standard">标准</button>
+          <button class="tool density-button" type="button" data-density="large">大图标</button>
+          <button id="themeToggle" class="tool" type="button">深色</button>
+          <button id="clipCurrent" class="tool primary" type="button">剪藏</button>
+          <button id="importBookmarks" class="tool" type="button">导入</button>
+          <button id="openSettings" class="tool" type="button">设置</button>
+        </div>
+      </header>
+
+      <section id="status" class="status" aria-live="polite"></section>
+
+      <div class="layout">
+        <aside class="sidebar">
+          <div class="panel-title">分类</div>
+          <div id="categoryList" class="category-list"></div>
+        </aside>
+
+        <section class="content">
+          <div class="content-head">
+            <div id="contentTitle" class="content-title">全部收藏</div>
+            <button id="aiRecall" class="ai-recall" type="button">AI 找回</button>
+            <button id="rightDrawerToggle" class="drawer-toggle" type="button">功能</button>
+          </div>
+          <div id="cards" class="bookmark-grid"></div>
+        </section>
+
+        <aside id="rightPanel" class="right-panel">
+          <section class="widget">
+            <h2>今日回访</h2>
+            <div id="revisitWidget" class="widget-body"></div>
+          </section>
+          <section class="widget">
+            <h2>最近剪藏</h2>
+            <div id="recentWidget" class="widget-body"></div>
+          </section>
+          <section class="widget">
+            <h2>插件操作</h2>
+            <button id="rightImport" class="wide-action" type="button">导入浏览器书签</button>
+            <button id="rightSettings" class="wide-action" type="button">打开设置</button>
+          </section>
+        </aside>
+      </div>
+
+      <section id="editPanel" class="edit-panel" hidden>
+        <div class="edit-head">
+          <strong>编辑收藏</strong>
+          <button id="editClose" class="icon-button" type="button" aria-label="关闭编辑">×</button>
+        </div>
+        <input id="editTitle" type="text" placeholder="标题" />
+        <input id="editFolder" type="text" placeholder="分类，例如：书签栏 / 工作 / AI" />
+        <input id="editTags" type="text" placeholder="标签，用逗号分隔" />
+        <textarea id="editWhy" rows="3" placeholder="备注"></textarea>
+        <div class="edit-actions">
+          <button id="editSave" class="tool primary" type="button">保存</button>
+          <button id="editCancel" class="tool" type="button">取消</button>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
