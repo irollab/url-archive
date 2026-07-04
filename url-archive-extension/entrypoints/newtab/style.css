@@ -1305,8 +1305,8 @@ button {
 }
 .dome-gallery * { box-sizing: border-box; }
 .dome-gallery.dg-scroll-lock { overflow: hidden; }
-.dg-sphere, .dg-item, .dg-tile { transform-style: preserve-3d; }
-.dg-main {
+.dome-gallery .dg-sphere, .dome-gallery .dg-item, .dome-gallery .dg-tile { transform-style: preserve-3d; }
+.dome-gallery .dg-main {
   position: absolute;
   inset: 0;
   display: grid;
@@ -1317,7 +1317,7 @@ button {
   -webkit-user-select: none;
   background: transparent;
 }
-.dg-stage {
+.dome-gallery .dg-stage {
   width: 100%;
   height: 100%;
   display: grid;
@@ -1326,11 +1326,11 @@ button {
   perspective-origin: 50% 50%;
   contain: layout paint size;
 }
-.dg-sphere {
+.dome-gallery .dg-sphere {
   transform: translateZ(calc(var(--radius) * -1));
   will-change: transform;
 }
-.dg-overlay {
+.dome-gallery .dg-overlay {
   position: absolute;
   inset: 0;
   margin: auto;
@@ -1338,7 +1338,7 @@ button {
   pointer-events: none;
   background-image: radial-gradient(rgba(235, 235, 235, 0) 68%, var(--overlay-blur-color) 100%);
 }
-.dg-item {
+.dome-gallery .dg-item {
   width: calc(var(--item-width) * var(--item-size-x));
   height: calc(var(--item-height) * var(--item-size-y));
   position: absolute;
@@ -1352,7 +1352,7 @@ button {
     rotateX(calc(var(--rot-x) * (var(--offset-y) - ((var(--item-size-y) - 1) / 2))))
     translateZ(var(--radius));
 }
-.dg-tile {
+.dome-gallery .dg-tile {
   position: absolute;
   inset: 10px;
   display: grid;
@@ -1365,20 +1365,20 @@ button {
   transform: translateZ(0);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
 }
-.dg-tile:focus { outline: none; }
-.dg-favicon {
+.dome-gallery .dg-tile:focus { outline: none; }
+.dome-gallery .dg-favicon {
   width: 58%;
   height: 58%;
   object-fit: contain;
   pointer-events: none;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .35));
 }
-.dg-initial {
+.dome-gallery .dg-initial {
   font-size: 1.6rem;
   font-weight: 800;
   color: #fff;
 }
-.dg-edge {
+.dome-gallery .dg-edge {
   position: absolute;
   left: 0;
   right: 0;
@@ -1386,9 +1386,9 @@ button {
   z-index: 5;
   pointer-events: none;
 }
-.dg-edge--top { top: 0; background: linear-gradient(to top, transparent, var(--overlay-blur-color)); }
-.dg-edge--bottom { bottom: 0; background: linear-gradient(to bottom, transparent, var(--overlay-blur-color)); }
-.dg-viewer {
+.dome-gallery .dg-edge--top { top: 0; background: linear-gradient(to top, transparent, var(--overlay-blur-color)); }
+.dome-gallery .dg-edge--bottom { bottom: 0; background: linear-gradient(to bottom, transparent, var(--overlay-blur-color)); }
+.dome-gallery .dg-viewer {
   position: absolute;
   inset: 0;
   z-index: 20;
@@ -1398,15 +1398,15 @@ button {
   justify-content: center;
   padding: var(--viewer-pad);
 }
-.dg-frame {
+.dome-gallery .dg-frame {
   height: 100%;
   aspect-ratio: 1;
   display: flex;
 }
 @media (max-aspect-ratio: 1/1) {
-  .dg-frame { height: auto; width: 100%; }
+  .dome-gallery .dg-frame { height: auto; width: 100%; }
 }
-.dg-scrim {
+.dome-gallery .dg-scrim {
   position: absolute;
   inset: 0;
   z-index: 10;
@@ -1420,7 +1420,7 @@ button {
   opacity: 1;
   pointer-events: all;
 }
-.dg-enlarge {
+.dome-gallery .dg-enlarge {
   position: absolute;
   z-index: 30;
   border-radius: 28px;
@@ -1431,7 +1431,7 @@ button {
   transform-origin: top left;
   box-shadow: 0 20px 50px rgba(0, 0, 0, .4);
 }
-.dg-card {
+.dome-gallery .dg-card {
   width: 100%;
   height: 100%;
   display: grid;
@@ -1440,9 +1440,9 @@ button {
   padding: 24px;
   color: #fff;
 }
-.dg-card-favicon { width: 96px; height: 96px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,.4)); }
-.dg-card-initial { font-size: 4rem; font-weight: 800; }
-.dg-card-title {
+.dome-gallery .dg-card-favicon { width: 96px; height: 96px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,.4)); }
+.dome-gallery .dg-card-initial { font-size: 4rem; font-weight: 800; }
+.dome-gallery .dg-card-title {
   font-size: 1rem;
   font-weight: 700;
   text-align: center;
