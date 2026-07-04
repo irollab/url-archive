@@ -1,14 +1,18 @@
 import { describe, test, expect } from 'vitest';
-import { serializeNote, slugify, generateFilename } from './markdown';
+import { canonicalizeUrl, serializeNote, slugify, generateFilename } from './markdown';
 import type { ClippedNote } from './types';
 
 const baseNote: ClippedNote = {
   url: 'https://example.com/article',
+  canonicalUrl: 'https://example.com/article',
   title: '一篇关于动画库的文章',
   clipped: '2026-06-23T14:30:00',
   domain: 'example.com',
   summary: 'AI 生成的一句话摘要',
   tags: ['前端', '动画库'],
+  keywords: ['动效选型', '前端组件'],
+  aliases: ['动画方案', '落地页动效'],
+  intent: '做落地页技术选型时回看',
   why: '做落地页选型用',
   status: 'unread',
   revived: 0,
@@ -23,7 +27,11 @@ describe('serializeNote', () => {
     const md = serializeNote(baseNote);
     expect(md.startsWith('---\n')).toBe(true);
     expect(md).toContain('url: https://example.com/article');
+    expect(md).toContain('canonical_url: https://example.com/article');
     expect(md).toContain('summary: AI 生成的一句话摘要');
+    expect(md).toContain('keywords:');
+    expect(md).toContain('aliases:');
+    expect(md).toContain('intent: 做落地页技术选型时回看');
     expect(md).toContain('last_visited: null');
     expect(md).toContain('ai_pending: false');
     expect(md).toContain('> [!summary] 速览');
@@ -51,15 +59,26 @@ describe('slugify', () => {
 });
 
 describe('generateFilename', () => {
-  test('格式为 domain-slug-日期.md', () => {
-    expect(generateFilename(baseNote)).toBe(
-      'example.com-一篇关于动画库的文章-2026-06-23.md',
-    );
+  test('文件名包含规范化 URL 的稳定哈希，不随剪藏日期变化', () => {
+    expect(generateFilename(baseNote)).toBe(generateFilename({
+      ...baseNote,
+      clipped: '2026-07-03T14:30:00',
+    }));
   });
 
-  test('空标题回退到 untitled', () => {
-    expect(generateFilename({ ...baseNote, title: '' })).toBe(
-      'example.com-untitled-2026-06-23.md',
+  test('文件名不依赖标题变化', () => {
+    expect(generateFilename({ ...baseNote, title: '' })).toBe(generateFilename({
+      ...baseNote,
+      title: '另一个标题',
+    }));
+    expect(generateFilename(baseNote)).toMatch(/^example\.com-article-[a-f0-9]+\.md$/);
+  });
+});
+
+describe('canonicalizeUrl', () => {
+  test('去掉 hash、追踪参数并排序查询参数', () => {
+    expect(canonicalizeUrl('HTTPS://Example.com/a/?b=2&utm_source=x&a=1#top')).toBe(
+      'https://example.com/a?a=1&b=2',
     );
   });
 });

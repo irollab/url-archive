@@ -1,7 +1,7 @@
 import { describe, test, expect, vi } from 'vitest';
 import { captureClip } from './capture';
 import type { ClipData, Settings, AIResult, QueueItem } from './types';
-import type { VaultWriter } from './vault';
+import { VaultWriteError, type VaultWriter } from './vault';
 
 const settings: Settings = {
   llmBaseUrl: 'x', llmApiKey: 'x', llmModel: 'x',
@@ -16,7 +16,14 @@ const clip: ClipData = {
   clippedAt: '2026-06-23T14:30:00',
 };
 
-const aiOk: AIResult = { summary: '摘要', highlights: ['h'], tags: ['t'] };
+const aiOk: AIResult = {
+  summary: '摘要',
+  highlights: ['h'],
+  tags: ['t'],
+  keywords: ['财务自动化'],
+  aliases: ['智能记账工具'],
+  intent: '寻找财务 SaaS 时回看',
+};
 
 function fakeWriter(impl?: () => Promise<void>): VaultWriter & { written: { path: string; content: string }[] } {
   const written: { path: string; content: string }[] = [];
@@ -49,8 +56,22 @@ describe('captureClip', () => {
 
     expect(result.written).toBe(true);
     expect(writer.written).toHaveLength(1);
-    expect(writer.written[0].path).toBe('URL Archive/example.com-标题-2026-06-23.md');
+    expect(result.savedClip).toMatchObject({
+      url: clip.url,
+      canonicalUrl: 'https://example.com/a',
+      title: clip.title,
+      queued: false,
+      revived: 0,
+      keywords: ['财务自动化'],
+      aliases: ['智能记账工具'],
+      intent: '寻找财务 SaaS 时回看',
+    });
+    expect(writer.written[0].path).toMatch(/^URL Archive\/example\.com-a-[a-f0-9]+\.md$/);
+    expect(writer.written[0].content).toContain('canonical_url: https://example.com/a');
     expect(writer.written[0].content).toContain('summary: 摘要');
+    expect(writer.written[0].content).toContain('财务自动化');
+    expect(writer.written[0].content).toContain('智能记账工具');
+    expect(writer.written[0].content).toContain('寻找财务 SaaS 时回看');
     expect(writer.written[0].content).toContain('我的意图');
     expect(writer.written[0].content).toContain('ai_pending: false');
     expect(queue.items).toHaveLength(0);
@@ -68,7 +89,7 @@ describe('captureClip', () => {
     expect(writer.written[0].content).toContain('AI 摘要待补');
   });
 
-  test('写入失败：入队，written=false', async () => {
+  test('可重试写入失败：入队，written=false', async () => {
     const writer = fakeWriter(async () => { throw new Error('offline'); });
     const queue = fakeQueue();
     const enrich = vi.fn().mockResolvedValue(aiOk);
@@ -76,7 +97,20 @@ describe('captureClip', () => {
     const result = await captureClip(clip, '', settings, { enrich, writer, queue });
 
     expect(result.written).toBe(false);
+    expect(result.queuedReason).toBe('offline');
+    expect(result.savedClip.queued).toBe(true);
     expect(queue.items).toHaveLength(1);
-    expect(queue.items[0].path).toBe('URL Archive/example.com-标题-2026-06-23.md');
+    expect(queue.items[0].path).toMatch(/^URL Archive\/example\.com-a-[a-f0-9]+\.md$/);
+  });
+
+  test('不可重试写入失败：抛出错误且不入队', async () => {
+    const writer = fakeWriter(async () => {
+      throw new VaultWriteError('写入 vault 失败: 401', false);
+    });
+    const queue = fakeQueue();
+    const enrich = vi.fn().mockResolvedValue(aiOk);
+
+    await expect(captureClip(clip, '', settings, { enrich, writer, queue })).rejects.toThrow('401');
+    expect(queue.items).toHaveLength(0);
   });
 });
