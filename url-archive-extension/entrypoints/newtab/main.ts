@@ -346,13 +346,12 @@ async function savePrefs(update: Partial<Prefs>) {
   const requestId = ++prefsSaveSeq;
   const previousPrefs = { ...prefs };
   prefs = normalizePrefs({ ...prefs, ...update });
-  const nextPrefs = { ...prefs };
   applyPrefs();
 
   try {
     const res = await chrome.runtime.sendMessage({
       type: 'SAVE_NEW_TAB_PREFS',
-      prefs: nextPrefs,
+      update,
     }) as RuntimeResponse<{ prefs?: Prefs }>;
 
     if (!res?.ok || !res.prefs) {

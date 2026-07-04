@@ -5,7 +5,7 @@ import { ClipQueue } from '@/lib/queue';
 import { captureClip } from '@/lib/capture';
 import { clipsFromBookmarkTree } from '@/lib/bookmarks';
 import { buildDashboardData } from '@/lib/dashboard';
-import { loadNewTabPrefs, replaceNewTabPrefs } from '@/lib/preferences';
+import { loadNewTabPrefs, saveNewTabPrefs } from '@/lib/preferences';
 import {
   getSavedClipStats,
   getBookmarkFolders,
@@ -84,7 +84,7 @@ export default defineBackground(() => {
       return true;
     }
     if (msg?.type === 'SAVE_NEW_TAB_PREFS') {
-      handleSaveNewTabPrefs(msg.prefs ?? msg.update ?? {})
+      handleSaveNewTabPrefs(msg.update ?? msg.prefs ?? {})
         .then((prefs) => sendResponse({ ok: true, prefs }))
         .catch((e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }));
       return true;
@@ -213,8 +213,8 @@ async function findMostRecentCapturableTab() {
     .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
 }
 
-async function handleSaveNewTabPrefs(prefs: NewTabPrefs) {
-  const save = newTabPrefsSaveQueue.then(() => replaceNewTabPrefs(prefs));
+async function handleSaveNewTabPrefs(update: Partial<NewTabPrefs>) {
+  const save = newTabPrefsSaveQueue.then(() => saveNewTabPrefs(update));
   newTabPrefsSaveQueue = save.catch(() => undefined);
   return save;
 }
