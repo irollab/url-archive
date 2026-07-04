@@ -246,8 +246,17 @@ export class DomeGallery {
     const el = this.focusedEl;
     const overlay = this.viewer.querySelector('.dg-enlarge') as HTMLElement | null;
     if (!overlay) return;
+    // 防重入：关闭过程中标记，避免重复触发堆叠监听/定时器
+    if (overlay.dataset.closing === 'true') return;
+    overlay.dataset.closing = 'true';
     overlay.style.opacity = '0';
+    let done = false;
+    let fallback = 0;
     const cleanup = () => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(fallback);
+      overlay.removeEventListener('transitionend', cleanup);
       overlay.remove();
       if (el) el.style.visibility = '';
       this.focusedEl = null;
@@ -255,9 +264,9 @@ export class DomeGallery {
       this.root.removeAttribute('data-enlarging');
       this.root.classList.remove('dg-scroll-lock');
     };
-    overlay.addEventListener('transitionend', cleanup, { once: true });
-    // 兜底：若无过渡事件，300ms 后强制清理
-    window.setTimeout(cleanup, 320);
+    overlay.addEventListener('transitionend', cleanup);
+    // 兜底：若无过渡事件，320ms 后强制清理
+    fallback = window.setTimeout(cleanup, 320);
   }
 
   private applyTransform() {
