@@ -8,6 +8,7 @@ import {
   saveImage,
   toImageKey,
 } from '@/lib/image-store';
+import { DomeGallery, type DomeItem } from './dome-gallery';
 
 const appEl = document.getElementById('app') as HTMLElement;
 const statusEl = document.getElementById('status') as HTMLElement;
@@ -53,6 +54,8 @@ const columnGapValueEl = document.getElementById('columnGapValue') as HTMLOutput
 const rowGapInputEl = document.getElementById('rowGapInput') as HTMLInputElement;
 const rowGapValueEl = document.getElementById('rowGapValue') as HTMLOutputElement;
 const showLabelsInputEl = document.getElementById('showLabelsInput') as HTMLInputElement;
+const galleryModeInputEl = document.getElementById('galleryModeInput') as HTMLInputElement;
+const domeGalleryEl = document.getElementById('domeGallery') as HTMLDivElement;
 const detailListEl = document.getElementById('detailList') as HTMLDivElement;
 const rightPanelEl = document.getElementById('rightPanel') as HTMLElement;
 const rightDrawerHotspotEl = document.getElementById('rightDrawerHotspot') as HTMLButtonElement;
@@ -127,6 +130,7 @@ type Prefs = {
   columnGap: number;
   rowGap: number;
   showLabels: boolean;
+  galleryMode: boolean;
 };
 
 type RuntimeResponse<T> = {
@@ -146,6 +150,7 @@ const DEFAULT_PREFS: Prefs = {
   columnGap: 24,
   rowGap: 30,
   showLabels: true,
+  galleryMode: false,
 };
 
 const DEFAULT_BACKGROUND_IMAGE = 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=80';
@@ -171,6 +176,7 @@ let importingBookmarks = false;
 let clippingRecentPage = false;
 let searchEngine: SearchEngine = 'google';
 let drawerAutoCloseTimer: number | undefined;
+let domeInstance: DomeGallery | null = null;
 
 const PREVIEW_CARDS: DashboardCard[] = [
   previewCard('https://app.tapnow.ai', 'TapNow | 你的智能体创意画布', 'app.tapnow.ai', '书签栏 / AI绘画', 'bookmark', ['AI', '创意'], '智能体创意画布和视觉工作台'),
@@ -262,7 +268,11 @@ async function resolveDashboardImages(data: DashboardData): Promise<DashboardDat
 
 function renderDashboard(data: DashboardData, query: string, folder: string) {
   renderCategories(data.folders);
-  renderCards(data.cards, query);
+  if (prefs.galleryMode) {
+    renderDome(data.cards);
+  } else {
+    renderCards(data.cards, query);
+  }
   renderDetailList(data.cards);
   renderWidgets(data);
   contentTitleEl.textContent = folder || (query.trim() ? '搜索结果' : '全部收藏');
@@ -389,6 +399,26 @@ function renderCategories(folders: BookmarkFolderOption[]) {
   for (const folder of childFolders(folders, currentFolder)) {
     categoryListEl.append(categoryButton(folderName(folder.path), folder.path, folder.count));
   }
+}
+
+function mapToDomeItems(cards: DashboardCard[]): DomeItem[] {
+  return cards
+    .filter((card) => card.url)
+    .map((card) => ({
+      src: card.faviconUrl,
+      title: card.title || card.url,
+      url: card.url,
+      initial: (card.initial || card.domain || '?').slice(0, 1).toUpperCase(),
+    }));
+}
+
+function renderDome(cards: DashboardCard[]) {
+  if (!domeInstance) {
+    domeInstance = new DomeGallery(domeGalleryEl, {
+      onOpen: (url) => { openTab(url); },
+    });
+  }
+  domeInstance.setItems(mapToDomeItems(cards));
 }
 
 function renderCards(cards: DashboardCard[], query: string) {
@@ -812,6 +842,12 @@ function bindEvents() {
   showLabelsInputEl.addEventListener('change', () => {
     savePrefs({ showLabels: !showLabelsInputEl.checked });
   });
+
+  galleryModeInputEl.addEventListener('change', () => {
+    currentPage = 0;
+    savePrefs({ galleryMode: galleryModeInputEl.checked });
+    refreshDashboard();
+  });
 }
 
 function openDrawerTemporarily() {
@@ -856,6 +892,7 @@ async function applyPrefs() {
   appEl.style.setProperty('--column-gap', `${prefs.columnGap}px`);
   appEl.style.setProperty('--row-gap', `${prefs.rowGap}px`);
   appEl.classList.toggle('hide-labels', !prefs.showLabels);
+  appEl.classList.toggle('gallery-mode', prefs.galleryMode);
 
   gridColumnsInputEl.value = String(prefs.gridColumns);
   gridColumnsValueEl.value = String(prefs.gridColumns);
@@ -870,6 +907,7 @@ async function applyPrefs() {
   rowGapInputEl.value = String(prefs.rowGap);
   rowGapValueEl.value = `${prefs.rowGap}px`;
   showLabelsInputEl.checked = !prefs.showLabels;
+  galleryModeInputEl.checked = prefs.galleryMode;
 
   for (const button of densityButtons) {
     button.classList.toggle('active', button.dataset.density === prefs.density);
@@ -1230,6 +1268,7 @@ function normalizePrefs(value: Partial<Prefs>): Prefs {
     columnGap: clampInt(value.columnGap, DEFAULT_PREFS.columnGap, 0, 120),
     rowGap: clampInt(value.rowGap, DEFAULT_PREFS.rowGap, 0, 120),
     showLabels: typeof value.showLabels === 'boolean' ? value.showLabels : DEFAULT_PREFS.showLabels,
+    galleryMode: typeof value.galleryMode === 'boolean' ? value.galleryMode : DEFAULT_PREFS.galleryMode,
   };
 }
 
