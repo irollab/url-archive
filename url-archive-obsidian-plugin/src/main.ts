@@ -15,6 +15,7 @@ import {
   WorkspaceLeaf,
   addIcon,
   normalizePath,
+  setIcon,
 } from 'obsidian';
 import { ClipServer } from './clip-server';
 import {
@@ -30,7 +31,7 @@ import { buildRagContext, type RagSource } from './rag';
 import { buildCurrentNoteQuery, relatedHitsForCurrentNote } from './related';
 import { getDormantEntries, renderDormantReviewMarkdown } from './revival';
 import {
-  buildEmbeddingText,
+  planSemanticIndex,
   searchSemanticIndex,
   type SemanticSearchHit,
   type SemanticVector,
@@ -138,7 +139,7 @@ export default class UrlArchivePlugin extends Plugin {
       id: 'revive-url-archive-clip',
       name: '回访一条沉睡收藏',
       callback: async () => {
-        const entry = pickDormantEntry(this.entries);
+        const entry = this.pickReviveEntry();
         if (!entry) {
           new Notice('没有找到 URL Archive 收藏');
           return;
@@ -204,11 +205,19 @@ export default class UrlArchivePlugin extends Plugin {
   }
 
   getStats() {
+    const plan = planSemanticIndex(this.entries, this.semanticVectors);
     return {
       entries: this.entries.length,
       semanticVectors: this.semanticVectors.length,
+      pendingEmbeddings: plan.tasks.length,
       clipServer: this.clipServer?.running ?? false,
     };
+  }
+
+  /** 优先选真正沉睡（超阈值）的收藏，无则回退到最久未访问的一条 */
+  pickReviveEntry(): UrlArchiveEntry | null {
+    const dormant = getDormantEntries(this.entries, new Date(), this.settings.dormantDays, 1);
+    return dormant[0] ?? pickDormantEntry(this.entries);
   }
 
   /** 启动本地剪藏接收服务：仅桌面端、开关开启且已配置 Token */
@@ -303,21 +312,51 @@ export default class UrlArchivePlugin extends Plugin {
 
   async rebuildSemanticIndex() {
     await this.rebuildIndex();
-    const vectors: SemanticVector[] = [];
-    let indexed = 0;
+    const plan = planSemanticIndex(this.entries, this.semanticVectors);
 
-    for (const entry of this.entries) {
-      const text = buildEmbeddingText(entry);
-      if (!text.trim()) continue;
-      const embedding = await createEmbedding(text, this.settings);
-      vectors.push({ path: entry.path, embedding, indexedAt: new Date().toISOString() });
-      indexed += 1;
-      if (indexed % 5 === 0) new Notice(`URL Archive 语义索引：${indexed}/${this.entries.length}`);
+    // 复用未变更条目的旧向量，只对新增/变更的条目调用 embedding API
+    const vectors: SemanticVector[] = [...plan.reuse];
+
+    if (!plan.tasks.length) {
+      this.semanticVectors = vectors;
+      await this.savePluginData();
+      new Notice(`URL Archive 语义索引已是最新：共 ${vectors.length} 条，无需重新嵌入`);
+      return;
     }
 
+    new Notice(`URL Archive 语义索引：复用 ${plan.reuse.length} 条，待嵌入 ${plan.tasks.length} 条`);
+
+    let done = 0;
+    let failed = 0;
+    for (const task of plan.tasks) {
+      try {
+        const embedding = await createEmbedding(task.text, this.settings);
+        vectors.push({
+          path: task.entry.path,
+          embedding,
+          indexedAt: new Date().toISOString(),
+          hash: task.hash,
+        });
+        done += 1;
+        if (done % 5 === 0) new Notice(`URL Archive 语义索引：${done}/${plan.tasks.length}`);
+      } catch (error) {
+        failed += 1;
+        console.error(`[URL Archive] 嵌入失败：${task.entry.path}`, error);
+        // 单条失败不丢历史：若该条已有旧向量则保留，避免整体回退
+        const prev = this.semanticVectors.find((vector) => vector.path === task.entry.path);
+        if (prev) vectors.push(prev);
+      }
+    }
+
+    // 无论中途是否有失败，都持久化已完成的进度
     this.semanticVectors = vectors;
     await this.savePluginData();
-    new Notice(`URL Archive 语义索引已完成：${vectors.length} 条收藏`);
+
+    if (failed) {
+      new Notice(`URL Archive 语义索引完成：更新 ${done} 条，失败 ${failed} 条（已保留旧向量），共 ${vectors.length} 条`);
+    } else {
+      new Notice(`URL Archive 语义索引已完成：更新 ${done} 条，共 ${vectors.length} 条`);
+    }
   }
 
   async semanticSearch(query: string): Promise<SemanticSearchHit[]> {
@@ -422,12 +461,20 @@ function generateToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * 把品牌 SVG 转成 Obsidian ribbon 单色图标：
+ * 去掉黑色背景矩形与固定配色的 <defs>，统一用 currentColor 随主题变色，
+ * 并从原始 798.96×800 画布缩放到 addIcon 期望的 0 0 100 100 视口。
+ */
 function getSvgBody(svg: string): string {
-  return svg
+  const body = svg
     .replace(/<\?xml[\s\S]*?\?>/i, '')
     .replace(/<!doctype[\s\S]*?>/i, '')
     .replace(/<\/?svg[^>]*>/gi, '')
+    .replace(/<defs[\s\S]*?<\/defs>/gi, '')
+    .replace(/<rect\s+width="798\.96"\s+height="800"\s*\/>/i, '')
     .trim();
+  return `<g fill="currentColor" transform="scale(0.125)">${body}</g>`;
 }
 
 class ArchiveSearchModal extends FuzzySuggestModal<UrlArchiveEntry> {
@@ -659,52 +706,122 @@ class UrlArchivePanelView extends ItemView {
     const { containerEl } = this;
     containerEl.empty();
     const root = containerEl.createDiv({ cls: 'url-archive-panel' });
-    root.createEl('h2', { text: 'URL Archive' });
+
+    // 品牌头部：logo + 标题 + 副标题
+    const header = root.createDiv({ cls: 'ua-header' });
+    const mark = header.createDiv({ cls: 'ua-mark' });
+    setIcon(mark, IROLLAB_ICON_ID);
+    const titles = header.createDiv({ cls: 'ua-titles' });
+    titles.createDiv({ cls: 'ua-title', text: 'URL Archive' });
+    titles.createDiv({ cls: 'ua-subtitle', text: '智能收藏助手' });
 
     const stats = this.plugin.getStats();
-    root.createEl('p', {
-      text: `已索引 ${stats.entries} 条收藏，语义向量 ${stats.semanticVectors} 条`,
-    });
 
-    this.addButton(root, '搜索收藏', () => this.plugin.openKeywordSearch());
-    this.addButton(root, '语义搜索', () => this.plugin.openSemanticSearch());
-    this.addButton(root, '问答收藏库', () => this.plugin.openAskModal());
-    this.addButton(root, '重建普通索引', async () => {
-      await this.plugin.rebuildIndex();
-      new Notice(`URL Archive 已索引 ${this.plugin.getStats().entries} 条收藏`);
-      this.render();
-    });
-    this.addButton(root, '重建语义索引', async () => {
-      await this.plugin.rebuildSemanticIndex();
-      this.render();
-    });
-    this.addButton(root, '回访一条沉睡收藏', async () => {
-      const entry = pickDormantEntry(this.plugin['entries']);
-      if (!entry) {
-        new Notice('没有找到 URL Archive 收藏');
-        return;
-      }
-      await this.plugin.openEntry(entry);
-    });
-    this.addButton(root, '生成沉睡收藏回顾', async () => {
-      await this.plugin.createDormantReview();
-    });
-    this.addButton(root, '为当前笔记推荐收藏', async () => {
-      const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-      if (!view?.file) {
-        new Notice('当前没有打开 markdown 笔记');
-        return;
-      }
-      await this.plugin.suggestRelatedForCurrentNote(view);
-    });
+    // 统计卡片
+    const statRow = root.createDiv({ cls: 'ua-stats' });
+    this.addStat(statRow, String(stats.entries), '已索引收藏');
+    this.addStat(statRow, String(stats.semanticVectors), '语义向量');
+
+    // 状态：剪藏服务 + 语义索引待更新提示
+    const statusRow = root.createDiv({ cls: 'ua-status-row' });
+    const pill = statusRow.createDiv({ cls: `ua-status ${stats.clipServer ? 'is-on' : 'is-off'}` });
+    pill.createSpan({ cls: 'ua-dot' });
+    pill.createSpan({ text: stats.clipServer ? '剪藏服务运行中' : '剪藏服务未运行' });
+    if (stats.pendingEmbeddings > 0) {
+      const pending = statusRow.createDiv({ cls: 'ua-status is-pending' });
+      pending.createSpan({ cls: 'ua-dot' });
+      pending.createSpan({ text: `${stats.pendingEmbeddings} 条待建语义索引` });
+    }
+
+    // 分组操作
+    this.addSection(root, '检索', [
+      { icon: 'search', label: '搜索收藏', onClick: () => this.plugin.openKeywordSearch() },
+      { icon: 'sparkles', label: '语义搜索', onClick: () => this.plugin.openSemanticSearch() },
+      { icon: 'help-circle', label: '问答收藏库', onClick: () => this.plugin.openAskModal() },
+    ]);
+
+    this.addSection(root, '索引', [
+      {
+        icon: 'refresh-cw',
+        label: '重建普通索引',
+        onClick: async () => {
+          await this.plugin.rebuildIndex();
+          new Notice(`URL Archive 已索引 ${this.plugin.getStats().entries} 条收藏`);
+          this.render();
+        },
+      },
+      {
+        icon: 'brain',
+        label: '重建语义索引',
+        onClick: async () => {
+          await this.plugin.rebuildSemanticIndex();
+          this.render();
+        },
+      },
+    ]);
+
+    this.addSection(root, '回访', [
+      {
+        icon: 'history',
+        label: '回访一条沉睡收藏',
+        onClick: async () => {
+          const entry = this.plugin.pickReviveEntry();
+          if (!entry) {
+            new Notice('没有找到 URL Archive 收藏');
+            return;
+          }
+          await this.plugin.openEntry(entry);
+        },
+      },
+      {
+        icon: 'scroll-text',
+        label: '生成沉睡收藏回顾',
+        onClick: async () => {
+          await this.plugin.createDormantReview();
+        },
+      },
+      {
+        icon: 'lightbulb',
+        label: '为当前笔记推荐收藏',
+        onClick: async () => {
+          const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+          if (!view?.file) {
+            new Notice('当前没有打开 markdown 笔记');
+            return;
+          }
+          await this.plugin.suggestRelatedForCurrentNote(view);
+        },
+      },
+    ]);
   }
 
-  private addButton(parent: HTMLElement, text: string, onClick: () => void | Promise<void>) {
-    const button = parent.createEl('button', { text });
-    button.style.display = 'block';
-    button.style.width = '100%';
-    button.style.marginBottom = '8px';
-    button.onclick = () => {
+  private addStat(parent: HTMLElement, value: string, label: string) {
+    const card = parent.createDiv({ cls: 'ua-stat' });
+    card.createDiv({ cls: 'ua-stat-value', text: value });
+    card.createDiv({ cls: 'ua-stat-label', text: label });
+  }
+
+  private addSection(
+    parent: HTMLElement,
+    title: string,
+    actions: { icon: string; label: string; onClick: () => void | Promise<void> }[],
+  ) {
+    const section = parent.createDiv({ cls: 'ua-section' });
+    section.createDiv({ cls: 'ua-section-title', text: title });
+    const list = section.createDiv({ cls: 'ua-actions' });
+    for (const action of actions) {
+      this.addActionRow(list, action.icon, action.label, action.onClick);
+    }
+  }
+
+  private addActionRow(parent: HTMLElement, icon: string, label: string, onClick: () => void | Promise<void>) {
+    const btn = parent.createEl('button', { cls: 'ua-action' });
+    const iconEl = btn.createSpan({ cls: 'ua-action-icon' });
+    setIcon(iconEl, icon);
+    btn.createSpan({ cls: 'ua-action-label', text: label });
+    const chevron = btn.createSpan({ cls: 'ua-action-chevron' });
+    setIcon(chevron, 'chevron-right');
+    btn.onclick = () => {
       Promise.resolve(onClick()).catch((error) => {
         new Notice(error instanceof Error ? error.message : String(error));
       });

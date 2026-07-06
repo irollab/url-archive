@@ -1,0 +1,178 @@
+/* URL Archive 侧边面板 —— 全部使用 Obsidian 主题变量，自动适配明暗 */
+.url-archive-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 14px 12px 20px;
+}
+
+/* 品牌头部 */
+.url-archive-panel .ua-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.url-archive-panel .ua-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+.url-archive-panel .ua-mark svg {
+  width: 22px;
+  height: 22px;
+}
+.url-archive-panel .ua-title {
+  font-size: 1.05em;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-normal);
+}
+.url-archive-panel .ua-subtitle {
+  margin-top: 1px;
+  font-size: 0.76em;
+  color: var(--text-muted);
+}
+
+/* 统计卡片 */
+.url-archive-panel .ua-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.url-archive-panel .ua-stat {
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-secondary);
+}
+.url-archive-panel .ua-stat-value {
+  font-size: 1.5em;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-normal);
+}
+.url-archive-panel .ua-stat-label {
+  margin-top: 2px;
+  font-size: 0.72em;
+  color: var(--text-muted);
+}
+
+/* 状态胶囊行 */
+.url-archive-panel .ua-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.url-archive-panel .ua-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75em;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+}
+.url-archive-panel .ua-status .ua-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.url-archive-panel .ua-status.is-on {
+  color: var(--text-normal);
+}
+.url-archive-panel .ua-status.is-on .ua-dot {
+  background: var(--color-green, #3fb950);
+  box-shadow: 0 0 0 3px rgba(63, 185, 80, 0.18);
+}
+.url-archive-panel .ua-status.is-pending {
+  color: var(--text-normal);
+}
+.url-archive-panel .ua-status.is-pending .ua-dot {
+  background: var(--color-yellow, #d29922);
+  box-shadow: 0 0 0 3px rgba(210, 153, 34, 0.18);
+}
+
+/* 分组 */
+.url-archive-panel .ua-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.url-archive-panel .ua-section-title {
+  padding-left: 2px;
+  font-size: 0.7em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.url-archive-panel .ua-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 操作项 —— 覆盖 Obsidian 默认按钮样式 */
+.url-archive-panel .ua-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.88em;
+  text-align: left;
+  color: var(--text-normal);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.url-archive-panel .ua-action:hover {
+  background: var(--background-modifier-hover);
+  box-shadow: none;
+}
+.url-archive-panel .ua-action-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--background-secondary);
+  color: var(--text-accent);
+}
+.url-archive-panel .ua-action-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.url-archive-panel .ua-action-label {
+  flex: 1 1 auto;
+}
+.url-archive-panel .ua-action-chevron {
+  display: flex;
+  align-items: center;
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.url-archive-panel .ua-action-chevron svg {
+  width: 15px;
+  height: 15px;
+}
+.url-archive-panel .ua-action:hover .ua-action-chevron {
+  opacity: 1;
+}

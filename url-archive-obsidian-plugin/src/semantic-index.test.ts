@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vitest';
-import { buildEmbeddingText, cosineSimilarity, searchSemanticIndex } from './semantic-index';
+import {
+  buildEmbeddingText,
+  cosineSimilarity,
+  hashEmbeddingText,
+  planSemanticIndex,
+  searchSemanticIndex,
+  type SemanticVector,
+} from './semantic-index';
 import type { UrlArchiveEntry } from './archive-index';
 
 function entry(path: string, title: string): UrlArchiveEntry {
@@ -42,5 +49,51 @@ describe('semantic index', () => {
     ], [0.9, 0.1]);
 
     expect(hits[0].entry.path).toBe('a.md');
+  });
+});
+
+describe('incremental semantic index planning', () => {
+  test('hash is stable for same text and differs on change', () => {
+    expect(hashEmbeddingText('hello')).toBe(hashEmbeddingText('hello'));
+    expect(hashEmbeddingText('hello')).not.toBe(hashEmbeddingText('hell0'));
+  });
+
+  test('reuses vectors whose content hash is unchanged, re-embeds changed ones', () => {
+    const a = entry('a.md', 'A');
+    const b = entry('b.md', 'B');
+    const existing: SemanticVector[] = [
+      { path: 'a.md', embedding: [1, 0], indexedAt: 'now', hash: hashEmbeddingText(buildEmbeddingText(a)) },
+      { path: 'b.md', embedding: [0, 1], indexedAt: 'now', hash: 'stale-hash' },
+    ];
+
+    const plan = planSemanticIndex([a, b], existing);
+
+    expect(plan.reuse.map((v) => v.path)).toEqual(['a.md']);
+    expect(plan.tasks.map((t) => t.entry.path)).toEqual(['b.md']);
+    expect(plan.removed).toBe(0);
+  });
+
+  test('treats legacy vectors without hash as needing re-embed', () => {
+    const a = entry('a.md', 'A');
+    const existing: SemanticVector[] = [{ path: 'a.md', embedding: [1, 0], indexedAt: 'now' }];
+
+    const plan = planSemanticIndex([a], existing);
+
+    expect(plan.reuse).toHaveLength(0);
+    expect(plan.tasks.map((t) => t.entry.path)).toEqual(['a.md']);
+  });
+
+  test('counts vectors of deleted entries as removed', () => {
+    const a = entry('a.md', 'A');
+    const existing: SemanticVector[] = [
+      { path: 'a.md', embedding: [1, 0], indexedAt: 'now', hash: hashEmbeddingText(buildEmbeddingText(a)) },
+      { path: 'gone.md', embedding: [0, 1], indexedAt: 'now', hash: 'x' },
+    ];
+
+    const plan = planSemanticIndex([a], existing);
+
+    expect(plan.reuse.map((v) => v.path)).toEqual(['a.md']);
+    expect(plan.tasks).toHaveLength(0);
+    expect(plan.removed).toBe(1);
   });
 });
