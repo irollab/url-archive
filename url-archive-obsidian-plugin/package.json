@@ -1,0 +1,19 @@
+{
+  "name": "url-archive-obsidian-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --external:obsidian --external:http --format=cjs --target=es2018 --loader:.svg=text --outfile=main.js",
+    "compile": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "builtin-modules": "^5.0.0",
+    "esbuild": "^0.25.0",
+    "obsidian": "^1.8.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.0"
+  }
+}

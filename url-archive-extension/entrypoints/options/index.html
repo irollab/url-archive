@@ -12,9 +12,29 @@
       <p id="aiStatus" style="font-size:12px;color:#555;min-height:18px;"></p>
     </fieldset>
     <fieldset>
+      <legend>Obsidian 写入方式</legend>
+      <label>写入通道
+        <select id="vaultTarget" style="width:100%">
+          <option value="official">URL Archive 官方插件（推荐，无需额外安装）</option>
+          <option value="restApi">Obsidian Local REST API 插件</option>
+        </select>
+      </label>
+      <p style="font-size:12px;color:#555;margin:4px 0 0;">
+        选择「官方插件」时，请在 Obsidian 的 URL Archive 插件设置里开启本地服务，并把其 Token 填到下方对应栏位。
+      </p>
+    </fieldset>
+    <fieldset id="officialFields">
+      <legend>URL Archive 官方插件</legend>
+      <label>地址 <input id="officialApiUrl" style="width:100%" placeholder="http://127.0.0.1:27125" /></label>
+      <label>Token <input id="officialApiToken" type="password" style="width:100%" /></label>
+    </fieldset>
+    <fieldset id="restApiFields">
       <legend>Obsidian Local REST API</legend>
       <label>地址 <input id="restApiUrl" style="width:100%" /></label>
       <label>Token <input id="restApiToken" type="password" style="width:100%" /></label>
+    </fieldset>
+    <fieldset>
+      <legend>通用</legend>
       <label>vault 文件夹 <input id="vaultFolder" style="width:100%" /></label>
     </fieldset>
     <button id="save">保存</button>

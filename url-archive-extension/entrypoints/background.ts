@@ -1,6 +1,6 @@
 import { loadSettings } from '@/lib/settings';
 import { enrichClip } from '@/lib/llm';
-import { RestApiWriter } from '@/lib/vault';
+import { createVaultWriter, resolveVaultEndpoint } from '@/lib/vault';
 import { ClipQueue } from '@/lib/queue';
 import { captureClip } from '@/lib/capture';
 import { clipsFromBookmarkTree } from '@/lib/bookmarks';
@@ -203,7 +203,7 @@ async function handleCaptureFromTab(
     clippedAt: new Date().toISOString(),
   };
 
-  const writer = new RestApiWriter(settings);
+  const writer = createVaultWriter(settings);
   const result = await captureClip(clip, why, settings, {
     enrich: enrichClip,
     writer,
@@ -267,8 +267,8 @@ async function handleImportBrowserBookmarks() {
 async function flushQueue(queue: ClipQueue) {
   try {
     const settings = await loadSettings();
-    if (!settings.restApiToken) return;
-    const writer = new RestApiWriter(settings);
+    if (!resolveVaultEndpoint(settings).token.trim()) return;
+    const writer = createVaultWriter(settings);
     const items = await queue.getAll();
     for (const item of items) {
       try {

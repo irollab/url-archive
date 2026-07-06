@@ -38,13 +38,19 @@ export interface ClippedNote {
   contentMarkdown: string;
 }
 
+/** vault 写入目标：restApi = 第三方 Obsidian Local REST API 插件；official = URL Archive 官方插件内置服务 */
+export type VaultTarget = 'restApi' | 'official';
+
 /** 扩展配置 */
 export interface Settings {
   llmBaseUrl: string;         // 如 https://api.openai.com/v1
   llmApiKey: string;
   llmModel: string;           // 如 gpt-4o-mini
+  vaultTarget: VaultTarget;   // 剪藏写入走哪条通道
   restApiUrl: string;         // 如 http://127.0.0.1:27123
   restApiToken: string;
+  officialApiUrl: string;     // 官方插件本地服务地址，如 http://127.0.0.1:27125
+  officialApiToken: string;   // 官方插件生成的写入 Token
   vaultFolder: string;        // 如 "URL Archive"
 }
 

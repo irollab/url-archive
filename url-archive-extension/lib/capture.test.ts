@@ -5,7 +5,10 @@ import { VaultWriteError, type VaultWriter } from './vault';
 
 const settings: Settings = {
   llmBaseUrl: 'x', llmApiKey: 'x', llmModel: 'x',
-  restApiUrl: 'x', restApiToken: 'x', vaultFolder: 'URL Archive',
+  vaultTarget: 'restApi',
+  restApiUrl: 'x', restApiToken: 'x',
+  officialApiUrl: 'x', officialApiToken: 'x',
+  vaultFolder: 'URL Archive',
 };
 
 const clip: ClipData = {

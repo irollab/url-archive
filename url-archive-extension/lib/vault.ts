@@ -22,21 +22,39 @@ export interface VaultWriter {
   write(path: string, content: string): Promise<void>;
 }
 
+/** 单条 vault 写入端点配置：官方插件与 Local REST API 共用同一套 PUT /vault/{path} 协议 */
+export interface VaultEndpoint {
+  baseUrl: string;
+  token: string;
+}
+
+/** 按当前写入目标解析出对应端点配置 */
+export function resolveVaultEndpoint(settings: Settings): VaultEndpoint {
+  return settings.vaultTarget === 'official'
+    ? { baseUrl: settings.officialApiUrl, token: settings.officialApiToken }
+    : { baseUrl: settings.restApiUrl, token: settings.restApiToken };
+}
+
+/** 根据设置的写入目标构造 writer */
+export function createVaultWriter(settings: Settings, fetchFn: typeof fetch = defaultFetch): RestApiWriter {
+  return new RestApiWriter(resolveVaultEndpoint(settings), fetchFn);
+}
+
 export class RestApiWriter implements VaultWriter {
   constructor(
-    private settings: Settings,
+    private endpoint: VaultEndpoint,
     private fetchFn: typeof fetch = defaultFetch,
   ) {}
 
   async write(path: string, content: string): Promise<void> {
-    const token = normalizeBearerToken(this.settings.restApiToken);
+    const token = normalizeBearerToken(this.endpoint.token);
     if (!token) {
-      throw new VaultWriteError('未配置 Obsidian Local REST API Token', false);
+      throw new VaultWriteError('未配置 Obsidian 写入 Token', false);
     }
 
-    const baseUrl = this.settings.restApiUrl.trim().replace(/\/+$/, '');
+    const baseUrl = this.endpoint.baseUrl.trim().replace(/\/+$/, '');
     if (!baseUrl) {
-      throw new VaultWriteError('未配置 Obsidian Local REST API 地址', false);
+      throw new VaultWriteError('未配置 Obsidian 写入地址', false);
     }
 
     const normalizedPath = path.split('/').filter(Boolean).join('/');

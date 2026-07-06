@@ -6,8 +6,11 @@ const settings: Settings = {
   llmBaseUrl: 'https://api.example.com/v1',
   llmApiKey: 'sk-test',
   llmModel: 'test-model',
+  vaultTarget: 'restApi',
   restApiUrl: '',
   restApiToken: '',
+  officialApiUrl: '',
+  officialApiToken: '',
   vaultFolder: '',
 };
 

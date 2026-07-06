@@ -3,14 +3,25 @@ import { enrichClip } from '@/lib/llm';
 import type { Settings } from '@/lib/types';
 
 const fields: (keyof Settings)[] = [
-  'llmBaseUrl', 'llmApiKey', 'llmModel', 'restApiUrl', 'restApiToken', 'vaultFolder',
+  'llmBaseUrl', 'llmApiKey', 'llmModel',
+  'vaultTarget', 'restApiUrl', 'restApiToken', 'officialApiUrl', 'officialApiToken', 'vaultFolder',
 ];
+
+/** 根据当前写入通道显示对应端点配置，隐藏另一套 */
+function syncTargetVisibility() {
+  const target = (document.getElementById('vaultTarget') as HTMLSelectElement).value;
+  (document.getElementById('officialFields') as HTMLElement).hidden = target !== 'official';
+  (document.getElementById('restApiFields') as HTMLElement).hidden = target !== 'restApi';
+}
 
 async function init() {
   const s = await loadSettings();
   for (const f of fields) {
     (document.getElementById(f) as HTMLInputElement).value = String(s[f] ?? '');
   }
+  (document.getElementById('vaultTarget') as HTMLSelectElement)
+    .addEventListener('change', syncTargetVisibility);
+  syncTargetVisibility();
 }
 
 function collectSettings(): Settings {

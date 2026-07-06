@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "inlineSourceMap": true,
+    "inlineSources": true,
+    "module": "ESNext",
+    "target": "ES2018",
+    "allowJs": false,
+    "noImplicitAny": true,
+    "moduleResolution": "Bundler",
+    "importHelpers": true,
+    "isolatedModules": true,
+    "strictNullChecks": true,
+    "skipLibCheck": true,
+    "lib": ["DOM", "ES2018"],
+    "types": ["node", "obsidian"]
+  },
+  "include": ["src/**/*.ts"]
+}
