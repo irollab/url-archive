@@ -176,3 +176,174 @@
 .url-archive-panel .ua-action:hover .ua-action-chevron {
   opacity: 1;
 }
+
+/* ========== 结果类弹窗（语义搜索 / 问答 / 相关收藏） ========== */
+.url-archive-modal .ua-modal-head {
+  margin-bottom: 14px;
+}
+.url-archive-modal .ua-modal-title {
+  font-size: 1.3em;
+  font-weight: 700;
+  color: var(--text-normal);
+}
+.url-archive-modal .ua-modal-subtitle {
+  margin-top: 3px;
+  font-size: 0.82em;
+  color: var(--text-muted);
+}
+.url-archive-modal .ua-modal-subhead {
+  margin: 16px 0 8px;
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* 输入 */
+.url-archive-modal .ua-modal-input {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+}
+.url-archive-modal .ua-modal-textarea {
+  resize: vertical;
+  min-height: 64px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+.url-archive-modal .ua-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+/* 状态文案 */
+.url-archive-modal .ua-loading,
+.url-archive-modal .ua-empty {
+  padding: 18px 4px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.88em;
+}
+.url-archive-modal .ua-error {
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-error-border, rgba(233, 0, 41, 0.35));
+  background: var(--background-modifier-error, rgba(233, 0, 41, 0.1));
+  color: var(--text-error, #e90029);
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 结果卡片列表 */
+.url-archive-modal .ua-modal-results {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.url-archive-modal .ua-result-list,
+.url-archive-modal .ua-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.url-archive-modal .ua-result {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding: 12px 14px;
+  text-align: left;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-secondary);
+  box-shadow: none;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+}
+.url-archive-modal .ua-result:hover {
+  border-color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+  box-shadow: none;
+  transform: translateY(-1px);
+}
+.url-archive-modal .ua-source {
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-secondary);
+}
+.url-archive-modal .ua-result-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.url-archive-modal .ua-result-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.url-archive-modal .ua-result-rank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  font-size: 0.72em;
+  font-weight: 700;
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+}
+.url-archive-modal .ua-result-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+.url-archive-modal .ua-result-score {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background: var(--background-modifier-border);
+}
+.url-archive-modal .ua-result-domain {
+  margin-top: 4px;
+  font-size: 0.76em;
+  color: var(--text-accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.url-archive-modal .ua-result-summary {
+  display: -webkit-box;
+  margin-top: 6px;
+  font-size: 0.82em;
+  line-height: 1.5;
+  color: var(--text-muted);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 问答答案 */
+.url-archive-modal .ua-answer {
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

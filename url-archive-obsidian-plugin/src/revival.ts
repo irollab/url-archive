@@ -22,7 +22,11 @@ export function getDormantEntries(
     .slice(0, limit);
 }
 
-export function renderDormantReviewMarkdown(entries: UrlArchiveEntry[], generatedAt: Date): string {
+export function renderDormantReviewMarkdown(
+  entries: UrlArchiveEntry[],
+  generatedAt: Date,
+  dormantDays?: number,
+): string {
   const date = generatedAt.toISOString().slice(0, 10);
   const lines = [
     '---',
@@ -35,7 +39,8 @@ export function renderDormantReviewMarkdown(entries: UrlArchiveEntry[], generate
   ];
 
   if (!entries.length) {
-    lines.push('没有达到沉睡阈值的收藏。');
+    const scope = dormantDays ? `超过 ${dormantDays} 天未访问的` : '达到沉睡阈值的';
+    lines.push(`当前没有${scope}收藏，说明你的收藏都在活跃复习中 👍`);
     return `${lines.join('\n')}\n`;
   }
 

@@ -41,4 +41,11 @@ describe('revival', () => {
     expect(md).toContain('[[URL Archive/a.md|A]]');
     expect(md).toContain('回访场景');
   });
+
+  test('empty review explains the dormant threshold', () => {
+    const md = renderDormantReviewMarkdown([], new Date('2026-07-06T00:00:00.000Z'), 14);
+
+    expect(md).toContain('# URL Archive 回顾 - 2026-07-06');
+    expect(md).toContain('超过 14 天未访问的');
+  });
 });

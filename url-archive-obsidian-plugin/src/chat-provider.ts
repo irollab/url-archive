@@ -17,6 +17,8 @@ export async function createChatAnswer(prompt: string, settings: ChatSettings): 
   const response = await requestUrl({
     url: `${baseUrl}/chat/completions`,
     method: 'POST',
+    // 关闭 requestUrl 默认的 4xx/5xx 抛错，改由下方读出响应体给出可诊断的错误
+    throw: false,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
@@ -32,7 +34,7 @@ export async function createChatAnswer(prompt: string, settings: ChatSettings): 
   });
 
   if (response.status < 200 || response.status >= 300) {
-    throw new Error(`Chat 请求失败: ${response.status}`);
+    throw new Error(`Chat 请求失败 ${response.status}：${describeResponseError(response)}`);
   }
 
   const data = response.json as {
@@ -54,6 +56,23 @@ export async function createChatAnswer(prompt: string, settings: ChatSettings): 
     throw new Error('Chat 返回为空或格式不符合要求');
   }
   return content.trim();
+}
+
+/** 从错误响应中提取服务端返回的可读信息：优先解析 JSON 错误体，回退到原始文本 */
+function describeResponseError(response: { text?: string; json?: unknown }): string {
+  try {
+    const body = response.json as
+      | { error?: { message?: unknown } | unknown; msg?: unknown; message?: unknown }
+      | undefined;
+    const message = (body?.error as { message?: unknown } | undefined)?.message
+      ?? body?.msg
+      ?? body?.message
+      ?? body?.error;
+    if (message) return String(message);
+  } catch {
+    // 非 JSON 响应，回退到原始文本
+  }
+  return (response.text ?? '').slice(0, 400) || '无响应内容';
 }
 
 function normalizeBearerToken(token: string): string {

@@ -4,7 +4,6 @@ import {
   FuzzySuggestModal,
   ItemView,
   Modal,
-  MarkdownView,
   Notice,
   Platform,
   Plugin,
@@ -160,10 +159,10 @@ export default class UrlArchivePlugin extends Plugin {
       id: 'suggest-related-url-archive-clips',
       name: '为当前笔记推荐相关收藏',
       checkCallback: (checking) => {
-        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-        if (!view?.file) return false;
+        const file = this.app.workspace.getActiveFile();
+        if (!file || file.extension !== 'md') return false;
         if (!checking) {
-          this.suggestRelatedForCurrentNote(view).catch((error) => {
+          this.suggestRelatedForCurrentNote(file).catch((error) => {
             new Notice(error instanceof Error ? error.message : String(error));
           });
         }
@@ -378,7 +377,7 @@ export default class UrlArchivePlugin extends Plugin {
     await this.rebuildIndex();
     const now = new Date();
     const entries = getDormantEntries(this.entries, now, this.settings.dormantDays, this.settings.reviewLimit);
-    const markdown = renderDormantReviewMarkdown(entries, now);
+    const markdown = renderDormantReviewMarkdown(entries, now, this.settings.dormantDays);
     const folder = normalizePath(this.settings.reviewFolder || DEFAULT_SETTINGS.reviewFolder);
     const path = normalizePath(`${folder}/${now.toISOString().slice(0, 10)}.md`);
 
@@ -395,18 +394,21 @@ export default class UrlArchivePlugin extends Plugin {
       file = await this.app.vault.create(path, markdown);
     }
     await this.app.workspace.getLeaf(false).openFile(file);
-    new Notice(`URL Archive 回顾已生成：${entries.length} 条收藏`);
+    if (entries.length) {
+      new Notice(`URL Archive 回顾已生成：${entries.length} 条收藏`);
+    } else {
+      new Notice(`URL Archive 回顾已生成：0 条（没有超过 ${this.settings.dormantDays} 天未访问的收藏）`);
+    }
   }
 
-  async suggestRelatedForCurrentNote(view: MarkdownView) {
+  async suggestRelatedForCurrentNote(file: TFile) {
     if (!this.semanticVectors.length) {
       throw new Error('语义索引为空，请先运行“重建 URL Archive 语义索引”');
     }
-    if (!view.file) throw new Error('当前没有打开 markdown 笔记');
-    const content = await this.app.vault.read(view.file);
-    const query = buildCurrentNoteQuery(view.file.path, content);
+    const content = await this.app.vault.read(file);
+    const query = buildCurrentNoteQuery(file.path, content);
     const embedding = await createEmbedding(query, this.settings);
-    const hits = relatedHitsForCurrentNote(this.entries, this.semanticVectors, embedding, view.file.path, 5);
+    const hits = relatedHitsForCurrentNote(this.entries, this.semanticVectors, embedding, file.path, 5);
     new RelatedClipsModal(this.app, hits, async (entry) => {
       await this.openEntry(entry);
     }).open();
@@ -519,6 +521,43 @@ class ArchiveSearchModal extends FuzzySuggestModal<UrlArchiveEntry> {
   }
 }
 
+/** 统一的弹窗头部：标题 + 可选副标题 */
+function addModalHeader(contentEl: HTMLElement, title: string, subtitle?: string) {
+  const head = contentEl.createDiv({ cls: 'ua-modal-head' });
+  head.createDiv({ cls: 'ua-modal-title', text: title });
+  if (subtitle) head.createDiv({ cls: 'ua-modal-subtitle', text: subtitle });
+}
+
+/** 统一的结果卡片列表：排名 + 标题 + 匹配度 + 域名 + 摘要，点击回调 */
+function renderHitList(
+  container: HTMLElement,
+  hits: SemanticSearchHit[],
+  emptyText: string,
+  onChoose: (entry: UrlArchiveEntry) => void | Promise<void>,
+) {
+  container.empty();
+  if (!hits.length) {
+    container.createDiv({ cls: 'ua-empty', text: emptyText });
+    return;
+  }
+  const list = container.createDiv({ cls: 'ua-result-list' });
+  hits.forEach((hit, index) => {
+    const card = list.createEl('button', { cls: 'ua-result' });
+    const head = card.createDiv({ cls: 'ua-result-head' });
+    const titleWrap = head.createDiv({ cls: 'ua-result-title-wrap' });
+    titleWrap.createSpan({ cls: 'ua-result-rank', text: String(index + 1) });
+    titleWrap.createSpan({ cls: 'ua-result-title', text: hit.entry.title || hit.entry.url });
+    head.createSpan({ cls: 'ua-result-score', text: `${Math.round(hit.score * 100)}%` });
+    if (hit.entry.domain) card.createDiv({ cls: 'ua-result-domain', text: hit.entry.domain });
+    if (hit.entry.summary) card.createDiv({ cls: 'ua-result-summary', text: hit.entry.summary });
+    card.onclick = () => {
+      Promise.resolve(onChoose(hit.entry)).catch((error) => {
+        new Notice(error instanceof Error ? error.message : String(error));
+      });
+    };
+  });
+}
+
 class SemanticSearchModal extends Modal {
   private resultsEl!: HTMLElement;
   private inputEl!: HTMLInputElement;
@@ -534,14 +573,14 @@ class SemanticSearchModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.createEl('h2', { text: '语义搜索 URL Archive' });
+    contentEl.addClass('url-archive-modal');
+    addModalHeader(contentEl, '语义搜索', '用自然语言描述你记得的内容或意图');
     this.inputEl = contentEl.createEl('input', {
       type: 'text',
+      cls: 'ua-modal-input',
       placeholder: '描述你记得的内容或意图...',
     });
-    this.inputEl.style.width = '100%';
-    this.inputEl.style.marginBottom = '12px';
-    this.resultsEl = contentEl.createDiv();
+    this.resultsEl = contentEl.createDiv({ cls: 'ua-modal-results' });
 
     this.inputEl.addEventListener('keydown', async (event) => {
       if (event.key !== 'Enter') return;
@@ -554,34 +593,16 @@ class SemanticSearchModal extends Modal {
     const query = this.inputEl.value.trim();
     if (!query) return;
     this.resultsEl.empty();
-    this.resultsEl.createEl('p', { text: '搜索中...' });
+    this.resultsEl.createDiv({ cls: 'ua-loading', text: '搜索中…' });
     try {
       const hits = await this.search(query);
-      this.renderHits(hits);
+      renderHitList(this.resultsEl, hits, '没有找到语义匹配。', async (entry) => {
+        await this.onChoose(entry);
+        this.close();
+      });
     } catch (error) {
       this.resultsEl.empty();
-      this.resultsEl.createEl('p', { text: error instanceof Error ? error.message : String(error) });
-    }
-  }
-
-  private renderHits(hits: SemanticSearchHit[]) {
-    this.resultsEl.empty();
-    if (!hits.length) {
-      this.resultsEl.createEl('p', { text: '没有找到语义匹配。' });
-      return;
-    }
-    for (const hit of hits) {
-      const button = this.resultsEl.createEl('button', {
-        text: `${hit.entry.title || hit.entry.url} (${hit.score.toFixed(3)})`,
-      });
-      button.style.display = 'block';
-      button.style.width = '100%';
-      button.style.marginBottom = '8px';
-      button.onclick = async () => {
-        await this.onChoose(hit.entry);
-        this.close();
-      };
-      this.resultsEl.createEl('small', { text: hit.entry.summary || hit.entry.domain });
+      this.resultsEl.createDiv({ cls: 'ua-error', text: error instanceof Error ? error.message : String(error) });
     }
   }
 }
@@ -600,16 +621,17 @@ class AskUrlArchiveModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.createEl('h2', { text: '问答 URL Archive' });
+    contentEl.addClass('url-archive-modal');
+    addModalHeader(contentEl, '问答收藏库', '基于你的收藏检索并生成回答');
     this.inputEl = contentEl.createEl('textarea', {
+      cls: 'ua-modal-input ua-modal-textarea',
       placeholder: '询问你的收藏，例如：有哪些财务自动化工具？',
     });
     this.inputEl.rows = 3;
-    this.inputEl.style.width = '100%';
-    this.inputEl.style.marginBottom = '12px';
-    const button = contentEl.createEl('button', { text: '提问' });
+    const actions = contentEl.createDiv({ cls: 'ua-modal-actions' });
+    const button = actions.createEl('button', { cls: 'mod-cta', text: '提问' });
     button.onclick = async () => this.runAnswer();
-    this.resultsEl = contentEl.createDiv();
+    this.resultsEl = contentEl.createDiv({ cls: 'ua-modal-results' });
     this.inputEl.focus();
   }
 
@@ -617,32 +639,36 @@ class AskUrlArchiveModal extends Modal {
     const question = this.inputEl.value.trim();
     if (!question) return;
     this.resultsEl.empty();
-    this.resultsEl.createEl('p', { text: '思考中...' });
+    this.resultsEl.createDiv({ cls: 'ua-loading', text: '思考中…' });
     try {
       const result = await this.answer(question);
       this.renderAnswer(result.answer, result.sources);
     } catch (error) {
       this.resultsEl.empty();
-      this.resultsEl.createEl('p', { text: error instanceof Error ? error.message : String(error) });
+      this.resultsEl.createDiv({ cls: 'ua-error', text: error instanceof Error ? error.message : String(error) });
     }
   }
 
   private renderAnswer(answer: string, sources: RagSource[]) {
     this.resultsEl.empty();
-    const answerEl = this.resultsEl.createEl('div');
-    answerEl.style.whiteSpace = 'pre-wrap';
-    answerEl.setText(answer);
+    const answerCard = this.resultsEl.createDiv({ cls: 'ua-answer' });
+    answerCard.setText(answer);
 
-    this.resultsEl.createEl('h3', { text: '来源' });
+    this.resultsEl.createDiv({ cls: 'ua-modal-subhead', text: '来源' });
     if (!sources.length) {
-      this.resultsEl.createEl('p', { text: '没有来源。' });
+      this.resultsEl.createDiv({ cls: 'ua-empty', text: '没有来源。' });
       return;
     }
-    for (const source of sources) {
-      this.resultsEl.createEl('div', {
-        text: `${source.title || source.path} (${source.score.toFixed(3)}) - ${source.path}`,
-      });
-    }
+    const list = this.resultsEl.createDiv({ cls: 'ua-source-list' });
+    sources.forEach((source, index) => {
+      const item = list.createDiv({ cls: 'ua-source' });
+      const head = item.createDiv({ cls: 'ua-result-head' });
+      const titleWrap = head.createDiv({ cls: 'ua-result-title-wrap' });
+      titleWrap.createSpan({ cls: 'ua-result-rank', text: String(index + 1) });
+      titleWrap.createSpan({ cls: 'ua-result-title', text: source.title || source.path });
+      head.createSpan({ cls: 'ua-result-score', text: `${Math.round(source.score * 100)}%` });
+      item.createDiv({ cls: 'ua-result-domain', text: source.path });
+    });
   }
 }
 
@@ -658,26 +684,13 @@ class RelatedClipsModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.createEl('h2', { text: '相关 URL Archive 收藏' });
-    if (!this.hits.length) {
-      contentEl.createEl('p', { text: '没有找到相关收藏。' });
-      return;
-    }
-
-    for (const hit of this.hits) {
-      const button = contentEl.createEl('button', {
-        text: `${hit.entry.title || hit.entry.url} (${hit.score.toFixed(3)})`,
-      });
-      button.style.display = 'block';
-      button.style.width = '100%';
-      button.style.marginBottom = '6px';
-      button.onclick = async () => {
-        await this.onChoose(hit.entry);
-        this.close();
-      };
-      contentEl.createEl('small', { text: hit.entry.summary || hit.entry.domain });
-      contentEl.createEl('hr');
-    }
+    contentEl.addClass('url-archive-modal');
+    addModalHeader(contentEl, '相关收藏', '与当前笔记语义最接近的收藏');
+    const results = contentEl.createDiv({ cls: 'ua-modal-results' });
+    renderHitList(results, this.hits, '没有找到相关收藏。', async (entry) => {
+      await this.onChoose(entry);
+      this.close();
+    });
   }
 }
 
@@ -784,12 +797,12 @@ class UrlArchivePanelView extends ItemView {
         icon: 'lightbulb',
         label: '为当前笔记推荐收藏',
         onClick: async () => {
-          const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-          if (!view?.file) {
+          const file = this.app.workspace.getActiveFile();
+          if (!file || file.extension !== 'md') {
             new Notice('当前没有打开 markdown 笔记');
             return;
           }
-          await this.plugin.suggestRelatedForCurrentNote(view);
+          await this.plugin.suggestRelatedForCurrentNote(file);
         },
       },
     ]);
