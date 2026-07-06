@@ -60,6 +60,21 @@ export function colorForSeed(seed: string): string {
   return `hsl(${hue}, 60%, 52%)`;
 }
 
+function hueForSeed(seed: string): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  return hash % 360;
+}
+
+function applySeedColorVars(el: HTMLElement, seed: string) {
+  const hue = hueForSeed(seed);
+  el.style.setProperty('--fallback-hue', String(hue));
+  el.style.setProperty('--fallback-bg', `hsl(${hue} 54% 44%)`);
+  el.style.setProperty('--fallback-bg-soft', `hsl(${hue} 62% 58%)`);
+}
+
 export type DomeGalleryOptions = {
   onOpen: (url: string) => void;
   segments?: number;
@@ -190,15 +205,17 @@ export class DomeGallery {
     item.dataset.initial = t.initial;
 
     const tile = document.createElement('div');
-    tile.className = 'dg-tile';
+    tile.className = `dg-tile ${t.src ? 'dg-tile--favicon' : 'dg-tile--fallback'}`;
     tile.setAttribute('role', 'button');
     tile.tabIndex = 0;
     tile.setAttribute('aria-label', t.title || '打开书签');
-    tile.style.background = t.url ? colorForSeed(t.url) : 'transparent';
+    applySeedColorVars(tile, t.url || t.title || t.initial);
     tile.innerHTML = t.src
       ? `<img class="dg-favicon" src="${escapeAttr(t.src)}" alt="" draggable="false" />`
       : (t.initial ? `<span class="dg-initial">${escapeHtml(t.initial)}</span>` : '');
     tile.querySelector<HTMLImageElement>('.dg-favicon')?.addEventListener('error', function () {
+      tile.classList.remove('dg-tile--favicon');
+      tile.classList.add('dg-tile--fallback');
       this.replaceWith(Object.assign(document.createElement('span'), { className: 'dg-initial', textContent: t.initial || '?' }));
     }, { once: true });
     tile.addEventListener('click', () => this.onTileClick(item));
@@ -216,11 +233,16 @@ export class DomeGallery {
 
   private buildCard(url: string, src: string, title: string, initial: string): HTMLElement {
     const card = document.createElement('div');
-    card.className = 'dg-card';
-    card.style.background = colorForSeed(url);
+    card.className = `dg-card ${src ? 'dg-card--favicon' : 'dg-card--fallback'}`;
+    applySeedColorVars(card, url || title || initial);
     card.innerHTML = `
       ${src ? `<img class="dg-card-favicon" src="${escapeAttr(src)}" alt="" draggable="false" />` : `<span class="dg-card-initial">${escapeHtml(initial || '?')}</span>`}
       <div class="dg-card-title">${escapeHtml(title || url)}</div>`;
+    card.querySelector<HTMLImageElement>('.dg-card-favicon')?.addEventListener('error', function () {
+      card.classList.remove('dg-card--favicon');
+      card.classList.add('dg-card--fallback');
+      this.replaceWith(Object.assign(document.createElement('span'), { className: 'dg-card-initial', textContent: initial || '?' }));
+    }, { once: true });
     return card;
   }
 
