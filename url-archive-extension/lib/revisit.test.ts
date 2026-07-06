@@ -5,6 +5,7 @@ import {
   getBookmarkFolders,
   loadSavedClips,
   pickRevisitClip,
+  pickRevisitClips,
   recordRevisit,
   saveClipForRevisit,
   saveClipsForRevisit,
@@ -83,6 +84,30 @@ describe('revisit', () => {
     ]);
 
     expect(picked?.url).toBe('https://example.com/old');
+  });
+
+  test('可按回访优先级取多条轮播收藏', () => {
+    const picked = pickRevisitClips([
+      clip({ url: 'https://example.com/revived', revived: 1 }),
+      clip({ url: 'https://example.com/old', clipped: '2026-05-01T00:00:00.000Z' }),
+      clip({ url: 'https://example.com/new', clipped: '2026-06-01T00:00:00.000Z' }),
+    ], 2);
+
+    expect(picked.map((item) => item.url)).toEqual([
+      'https://example.com/old',
+      'https://example.com/new',
+    ]);
+  });
+
+  test('回访候选会忽略不可打开的脏 URL', () => {
+    const picked = pickRevisitClips([
+      clip({ url: 'undefined', title: '' }),
+      clip({ url: 'chrome://settings', title: '设置' }),
+      clip({ url: '', title: '空 URL' }),
+      clip({ url: 'https://example.com/valid', title: '有效收藏' }),
+    ]);
+
+    expect(picked.map((item) => item.url)).toEqual(['https://example.com/valid']);
   });
 
   test('记录回访会增加 revived 并写入 lastVisited', async () => {

@@ -1,5 +1,5 @@
 import { loadSettings } from '@/lib/settings';
-import { enrichClip } from '@/lib/llm';
+import { enrichClip, recallQuery } from '@/lib/llm';
 import { createVaultWriter, resolveVaultEndpoint } from '@/lib/vault';
 import { ClipQueue } from '@/lib/queue';
 import { captureClip } from '@/lib/capture';
@@ -10,7 +10,7 @@ import {
   getSavedClipStats,
   getBookmarkFolders,
   loadSavedClips,
-  pickRevisitClip,
+  pickRevisitClips,
   recordRevisit,
   deleteSavedClip,
   saveClipForRevisit,
@@ -52,7 +52,7 @@ export default defineBackground(() => {
     }
     if (msg?.type === 'SUGGEST_REVISIT') {
       handleSuggestRevisit()
-        .then((clip) => sendResponse({ ok: true, clip }))
+        .then((result) => sendResponse({ ok: true, ...result }))
         .catch((e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }));
       return true;
     }
@@ -67,6 +67,7 @@ export default defineBackground(() => {
         String(msg.query ?? ''),
         String(msg.filter ?? 'all') as ClipFilter,
         String(msg.folder ?? ''),
+        Number(msg.limit ?? 20),
       )
         .then((clips) => sendResponse({ ok: true, clips }))
         .catch((e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }));
@@ -75,6 +76,12 @@ export default defineBackground(() => {
     if (msg?.type === 'GET_DASHBOARD_DATA') {
       handleDashboardData(String(msg.query ?? ''), String(msg.folder ?? ''))
         .then((data) => sendResponse({ ok: true, data }))
+        .catch((e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+      return true;
+    }
+    if (msg?.type === 'AI_RECALL') {
+      handleAIRecall(String(msg.query ?? ''), String(msg.folder ?? ''))
+        .then((result) => sendResponse({ ok: true, ...result }))
         .catch((e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }));
       return true;
     }
@@ -227,7 +234,8 @@ async function handleSaveNewTabPrefs(update: Partial<NewTabPrefs>) {
 }
 
 async function handleSuggestRevisit() {
-  return pickRevisitClip(await loadSavedClips()) ?? null;
+  const clips = pickRevisitClips(await loadSavedClips(), 20);
+  return { clip: clips[0] ?? null, clips };
 }
 
 async function handleOpenRevisit(url: string) {
@@ -236,13 +244,25 @@ async function handleOpenRevisit(url: string) {
   await chrome.tabs.create({ url });
 }
 
-async function handleSearchClips(query: string, filter: ClipFilter, folder: string) {
-  return searchSavedClips(await loadSavedClips(), query, { filter, folder });
+async function handleSearchClips(query: string, filter: ClipFilter, folder: string, limit: number) {
+  const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 1000) : 20;
+  return searchSavedClips(await loadSavedClips(), query, { filter, folder, limit: safeLimit });
 }
 
 async function handleDashboardData(query: string, folder: string) {
   const clips = await loadSavedClips();
   return buildDashboardData(clips, { query, folder });
+}
+
+async function handleAIRecall(query: string, folder: string) {
+  const settings = await loadSettings();
+  const recall = await recallQuery(query, settings);
+  const clips = await loadSavedClips();
+  let data = buildDashboardData(clips, { query: recall.query, folder });
+  if (data.cards.length === 0 && recall.query !== query.trim()) {
+    data = buildDashboardData(clips, { query, folder });
+  }
+  return { data, recall };
 }
 
 async function handleSavedClipStats() {

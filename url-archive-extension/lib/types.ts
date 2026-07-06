@@ -32,7 +32,7 @@ export interface ClippedNote {
   why: string;
   status: 'unread' | 'read' | 'archived';
   revived: number;
-  lastVisited: string;        // 空串表示从未访问；序列化为 last_visited
+  lastVisited: string;        // 空串表示未回访；可来自 URL Archive 打开记录或浏览器书签最近使用时间
   aiPending: boolean;         // 序列化为 ai_pending
   highlights: string[];
   contentMarkdown: string;

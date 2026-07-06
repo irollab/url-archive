@@ -1,5 +1,5 @@
 import { describe, test, expect, vi } from 'vitest';
-import { enrichClip } from './llm';
+import { enrichClip, recallQuery } from './llm';
 import type { ClipData, Settings } from './types';
 
 const settings: Settings = {
@@ -121,5 +121,40 @@ describe('enrichClip', () => {
   test('HTTP 非 2xx 抛错', async () => {
     const fetchFn = vi.fn().mockResolvedValue({ ok: false, status: 500 } as Response);
     await expect(enrichClip(clip, settings, fetchFn)).rejects.toThrow('LLM 请求失败');
+  });
+});
+
+describe('recallQuery', () => {
+  test('把自然语言找回请求改写成本地搜索词', async () => {
+    const fetchFn = mockFetchReturning(JSON.stringify({
+      query: '向量 数据库 RAG',
+      keywords: ['embedding', '语义搜索'],
+      aliases: ['知识库'],
+      intent: '查找 RAG 工具',
+    }));
+    const result = await recallQuery('之前那个做知识库检索的工具', settings, fetchFn);
+    expect(result).toEqual({
+      query: '之前那个做知识库检索的工具 向量 数据库 RAG embedding 语义搜索 知识库 查找 工具',
+      keywords: ['embedding', '语义搜索'],
+      aliases: ['知识库'],
+      intent: '查找 RAG 工具',
+    });
+  });
+
+  test('保留原始输入，避免 AI 改写丢失精确线索', async () => {
+    const fetchFn = mockFetchReturning(JSON.stringify({
+      query: '财务 SaaS',
+      keywords: ['记账'],
+      aliases: [],
+      intent: '找财务工具',
+    }));
+    const result = await recallQuery('Fenxi365 那个智能记账工具', settings, fetchFn);
+    expect(result.query).toContain('Fenxi365');
+    expect(result.query).toContain('财务');
+    expect(result.query).toContain('记账');
+  });
+
+  test('缺少 AI Key 时抛出可读错误', async () => {
+    await expect(recallQuery('找 AI 工具', { ...settings, llmApiKey: '' })).rejects.toThrow('未配置 AI API Key');
   });
 });

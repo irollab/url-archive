@@ -139,14 +139,28 @@ function uniqueTags(tags: string[]): string[] {
 }
 
 export function pickRevisitClip(clips: SavedClip[]): SavedClip | undefined {
+  return pickRevisitClips(clips, 1)[0];
+}
+
+export function pickRevisitClips(clips: SavedClip[], limit = 10): SavedClip[] {
   return [...clips]
-    .filter((clip) => clip.url)
+    .filter((clip) => hasOpenableUrl(clip.url))
     .sort((a, b) => {
       if (a.revived !== b.revived) return a.revived - b.revived;
       const aVisited = a.lastVisited || a.clipped;
       const bVisited = b.lastVisited || b.clipped;
       return aVisited.localeCompare(bVisited);
-    })[0];
+    })
+    .slice(0, limit);
+}
+
+function hasOpenableUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 export function searchSavedClips(

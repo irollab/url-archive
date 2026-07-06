@@ -5,6 +5,11 @@ const SYSTEM_PROMPT =
   '{"summary":"一句话摘要","highlights":["要点1","要点2","要点3"],"tags":["标签1","标签2"],"keywords":["关键词1","关键词2"],"aliases":["用户可能搜索的别名1","别名2"],"intent":"什么场景下应该重新打开这条收藏"}。' +
   '不要输出 JSON 以外的任何内容。';
 
+const RECALL_PROMPT =
+  '你是收藏检索助手。把用户想找回的内容改写成适合本地收藏搜索的严格 JSON：' +
+  '{"query":"3到8个用空格分隔的搜索词","keywords":["关键词1","关键词2"],"aliases":["同义词1","别名2"],"intent":"用户可能想重新打开的内容类型"}。' +
+  '优先保留产品名、平台名、技术名、中文关键词和英文关键词；不要输出 JSON 以外的任何内容。';
+
 const defaultFetch: typeof fetch = (...args) => fetch(...args);
 
 function normalizeBearerToken(token: string): string {
@@ -27,6 +32,22 @@ type AIResultLike = Partial<AIResult> & {
   搜索别名?: unknown;
   回访场景?: unknown;
   使用场景?: unknown;
+};
+
+export interface AIRecallQuery {
+  query: string;
+  keywords: string[];
+  aliases: string[];
+  intent: string;
+}
+
+type AIRecallQueryLike = Partial<AIRecallQuery> & {
+  查询?: unknown;
+  关键词?: unknown;
+  别名?: unknown;
+  搜索别名?: unknown;
+  意图?: unknown;
+  回访场景?: unknown;
 };
 
 function stringifyContent(content: unknown): string {
@@ -128,6 +149,39 @@ function normalizeAIResult(parsed: AIResultLike): AIResult {
   };
 }
 
+function normalizeRecallQuery(parsed: AIRecallQueryLike, fallback: string): AIRecallQuery {
+  const keywords = normalizeStringArray(parsed.keywords ?? parsed.关键词);
+  const aliases = normalizeStringArray(parsed.aliases ?? parsed.别名 ?? parsed.搜索别名);
+  const intent = typeof parsed.intent === 'string'
+    ? parsed.intent
+    : typeof parsed.意图 === 'string'
+      ? parsed.意图
+      : typeof parsed.回访场景 === 'string'
+        ? parsed.回访场景
+        : '';
+  const rawQuery = typeof parsed.query === 'string'
+    ? parsed.query
+    : typeof parsed.查询 === 'string'
+      ? parsed.查询
+      : '';
+  const query = uniqueTerms([fallback, rawQuery, ...keywords, ...aliases, intent]).join(' ') || fallback.trim();
+  return { query, keywords, aliases, intent };
+}
+
+function uniqueTerms(values: string[]): string[] {
+  const seen = new Set<string>();
+  const terms: string[] = [];
+  for (const value of values) {
+    for (const term of value.split(/[\s,，、\n]+/).map((item) => item.trim()).filter(Boolean)) {
+      const key = term.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      terms.push(term);
+    }
+  }
+  return terms;
+}
+
 export async function enrichClip(
   clip: ClipData,
   settings: Settings,
@@ -173,6 +227,52 @@ export async function enrichClip(
   if (!hasUsableAIResult(result)) {
     const snippet = content.trim().slice(0, 240) || JSON.stringify(data).slice(0, 240);
     throw new Error(`LLM 返回为空或格式不符合要求：${snippet}`);
+  }
+  return result;
+}
+
+export async function recallQuery(
+  query: string,
+  settings: Settings,
+  fetchFn: typeof fetch = defaultFetch,
+): Promise<AIRecallQuery> {
+  const baseUrl = normalizeBaseUrl(settings.llmBaseUrl);
+  const apiKey = normalizeBearerToken(settings.llmApiKey);
+  const trimmed = query.trim();
+  if (!trimmed) throw new Error('请输入要找回的内容');
+  if (!baseUrl) throw new Error('未配置 AI API 端点');
+  if (!apiKey) throw new Error('未配置 AI API Key');
+  if (!settings.llmModel.trim()) throw new Error('未配置 AI 模型');
+
+  const res = await fetchFn(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: settings.llmModel,
+      temperature: 0.1,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: RECALL_PROMPT },
+        { role: 'user', content: `用户想找：${trimmed}` },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`LLM 请求失败: ${res.status}`);
+  }
+
+  const data = await res.json();
+  throwIfProviderError(data);
+  const content = extractResponseText(data);
+  const parsed = parseAIContent(content);
+  const result = normalizeRecallQuery(parsed, trimmed);
+  if (!result.query.trim()) {
+    const snippet = content.trim().slice(0, 240) || JSON.stringify(data).slice(0, 240);
+    throw new Error(`AI 找回返回为空或格式不符合要求：${snippet}`);
   }
   return result;
 }
