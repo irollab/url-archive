@@ -86,28 +86,16 @@ describe('dashboard view model', () => {
     expect(data.cards[0].faviconUrl).toBe('');
   });
 
-  test('builds favicon fallback for https urls without faviconUrl', () => {
-    const data = buildDashboardData([
-      clip({
-        url: 'https://example.com/path',
-        canonicalUrl: 'https://example.com/path',
-        faviconUrl: '',
-      }),
+  test('leaves favicon empty when clip has no faviconUrl (no /favicon.ico guessing)', () => {
+    const https = buildDashboardData([
+      clip({ url: 'https://example.com/path', canonicalUrl: 'https://example.com/path', faviconUrl: '' }),
+    ]);
+    const http = buildDashboardData([
+      clip({ url: 'http://example.com/path', canonicalUrl: 'http://example.com/path', faviconUrl: '' }),
     ]);
 
-    expect(data.cards[0].faviconUrl).toBe('https://example.com/favicon.ico');
-  });
-
-  test('builds favicon fallback for http urls without faviconUrl', () => {
-    const data = buildDashboardData([
-      clip({
-        url: 'http://example.com/path',
-        canonicalUrl: 'http://example.com/path',
-        faviconUrl: '',
-      }),
-    ]);
-
-    expect(data.cards[0].faviconUrl).toBe('http://example.com/favicon.ico');
+    expect(https.cards[0].faviconUrl).toBe('');
+    expect(http.cards[0].faviconUrl).toBe('');
   });
 
   test('uses domain initial when title is empty', () => {

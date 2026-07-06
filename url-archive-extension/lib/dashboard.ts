@@ -2,6 +2,7 @@ import {
   getBookmarkFolders,
   getSavedClipStats,
   pickRevisitClip,
+  pickRevisitClips,
   searchSavedClips,
   type BookmarkFolderOption,
   type SavedClipStats,
@@ -43,6 +44,7 @@ export interface DashboardData {
   cards: DashboardCard[];
   recent: DashboardCard[];
   revisit?: DashboardCard;
+  revisits: DashboardCard[];
 }
 
 export function buildDashboardData(clips: SavedClip[], options: DashboardOptions = {}): DashboardData {
@@ -54,7 +56,8 @@ export function buildDashboardData(clips: SavedClip[], options: DashboardOptions
     .sort((a, b) => b.clipped.localeCompare(a.clipped))
     .slice(0, 5)
     .map(toDashboardCard);
-  const revisitClip = pickRevisitClip(clips);
+  const revisitClips = pickRevisitClips(clips, 20);
+  const revisitClip = revisitClips[0] ?? pickRevisitClip(clips);
 
   return {
     stats: getSavedClipStats(clips),
@@ -62,6 +65,7 @@ export function buildDashboardData(clips: SavedClip[], options: DashboardOptions
     cards,
     recent,
     revisit: revisitClip ? toDashboardCard(revisitClip) : undefined,
+    revisits: revisitClips.map(toDashboardCard),
   };
 }
 
@@ -103,14 +107,7 @@ function sourceLabelFor(clip: SavedClip): string {
   return '剪藏';
 }
 
+// 只透传真实捕获/自定义的图标；缺失时留空，由新标签页按站点 URL 取浏览器缓存图标
 function resolveFaviconUrl(clip: SavedClip): string {
-  if (clip.faviconUrl) return clip.faviconUrl;
-
-  try {
-    const url = new URL(clip.url);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
-    return `${url.origin}/favicon.ico`;
-  } catch {
-    return '';
-  }
+  return clip.faviconUrl ?? '';
 }

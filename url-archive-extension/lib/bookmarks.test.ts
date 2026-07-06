@@ -14,6 +14,7 @@ describe('bookmarks', () => {
                 title: '纷析云',
                 url: 'https://f3.fenxi365.com/',
                 dateAdded: Date.parse('2026-07-01T00:00:00.000Z'),
+                dateLastUsed: Date.parse('2026-07-02T08:30:00.000Z'),
               },
             ],
           },
@@ -27,10 +28,11 @@ describe('bookmarks', () => {
       domain: 'f3.fenxi365.com',
       source: 'bookmark',
       folder: '根 / 工作',
-      faviconUrl: 'https://f3.fenxi365.com/favicon.ico',
+      faviconUrl: '',
       tags: ['浏览器书签', '根', '工作'],
       keywords: ['根', '工作'],
       clipped: '2026-07-01T00:00:00.000Z',
+      lastVisited: '2026-07-02T08:30:00.000Z',
     });
   });
 

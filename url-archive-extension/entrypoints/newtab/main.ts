@@ -63,6 +63,11 @@ const columnGapValueEl = document.getElementById('columnGapValue') as HTMLOutput
 const rowGapInputEl = document.getElementById('rowGapInput') as HTMLInputElement;
 const rowGapValueEl = document.getElementById('rowGapValue') as HTMLOutputElement;
 const showLabelsInputEl = document.getElementById('showLabelsInput') as HTMLInputElement;
+const iconGlowInputEl = document.getElementById('iconGlowInput') as HTMLInputElement;
+const fontFamilyInputEl = document.getElementById('fontFamilyInput') as HTMLSelectElement;
+const fontShadowInputEl = document.getElementById('fontShadowInput') as HTMLInputElement;
+const fontSizeInputEl = document.getElementById('fontSizeInput') as HTMLInputElement;
+const fontSizeValueEl = document.getElementById('fontSizeValue') as HTMLOutputElement;
 const galleryModeInputEl = document.getElementById('galleryModeInput') as HTMLInputElement;
 const domeGalleryEl = document.getElementById('domeGallery') as HTMLDivElement;
 const detailListEl = document.getElementById('detailList') as HTMLDivElement;
@@ -71,6 +76,11 @@ const rightDrawerHotspotEl = document.getElementById('rightDrawerHotspot') as HT
 const revisitWidgetEl = document.getElementById('revisitWidget') as HTMLDivElement;
 const recentWidgetEl = document.getElementById('recentWidget') as HTMLDivElement;
 const densityButtons = [...document.querySelectorAll<HTMLButtonElement>('.density-button')];
+const engineListEl = document.getElementById('engineList') as HTMLDivElement;
+const addEngineEl = document.getElementById('addEngine') as HTMLButtonElement;
+const engineIconFileEl = document.getElementById('engineIconFile') as HTMLInputElement;
+let engineMenuEl!: HTMLDivElement;
+let pendingIconEngineId = '';
 const themeToggleEl = document.getElementById('themeToggle') as HTMLButtonElement;
 const drawerToggleEl = document.getElementById('rightDrawerToggle') as HTMLButtonElement;
 const clipCurrentEl = document.getElementById('clipCurrent') as HTMLButtonElement;
@@ -81,7 +91,8 @@ const resetDefaultPrefsEl = document.getElementById('resetDefaultPrefs') as HTML
 
 type Density = 'compact' | 'standard' | 'large';
 type Theme = 'light' | 'dark';
-type SearchEngine = 'google' | 'bing' | 'baidu';
+type DisplayFont = 'system' | 'smiley-sans';
+type SearchEngineConfig = { id: string; name: string; url: string; icon?: string };
 
 type SavedClipStats = {
   total: number;
@@ -126,6 +137,7 @@ type DashboardData = {
   cards: DashboardCard[];
   recent: DashboardCard[];
   revisit?: DashboardCard;
+  revisits?: DashboardCard[];
 };
 
 type Prefs = {
@@ -143,9 +155,15 @@ type Prefs = {
   rowGap: number;
   showLabels: boolean;
   galleryMode: boolean;
+  iconGlow: boolean;
   searchBoxVisible: boolean;
   searchBoxWidth: number;
   searchBoxRadius: number;
+  fontFamily: DisplayFont;
+  fontShadow: boolean;
+  fontSize: number;
+  searchEngines: SearchEngineConfig[];
+  searchEngineId: string;
 };
 
 type RuntimeResponse<T> = {
@@ -153,8 +171,27 @@ type RuntimeResponse<T> = {
   error?: string;
 } & T;
 
+type AIRecallResponse = {
+  data?: DashboardData;
+  recall?: {
+    query: string;
+    keywords: string[];
+    aliases: string[];
+    intent: string;
+  };
+};
+
+const DEFAULT_SEARCH_ENGINES: SearchEngineConfig[] = [
+  { id: 'google', name: 'Google', url: 'https://www.google.com/search?q=%s', icon: '/engine/google.png' },
+  { id: 'bing', name: 'Bing', url: 'https://www.bing.com/search?q=%s', icon: '/engine/bing_new.png' },
+  { id: 'baidu', name: '百度', url: 'https://www.baidu.com/s?wd=%s', icon: '/engine/baidu.png' },
+  { id: 'yandex', name: 'Yandex', url: 'https://yandex.com/search/?text=%s', icon: '/engine/yandex.png' },
+];
+const REVISIT_ROTATE_MS = 6000;
+const REVISIT_FLASH_MS = 3000;
+
 const DEFAULT_PREFS: Prefs = {
-  density: 'standard',
+  density: 'large',
   theme: 'light',
   rightPanelCollapsed: false,
   backgroundImageUrl: '',
@@ -164,13 +201,19 @@ const DEFAULT_PREFS: Prefs = {
   gridRows: 3,
   cardRadius: 24,
   iconSize: 100,
-  columnGap: 42,
-  rowGap: 54,
+  columnGap: 48,
+  rowGap: 50,
   showLabels: true,
-  galleryMode: false,
+  galleryMode: true,
+  iconGlow: true,
   searchBoxVisible: true,
   searchBoxWidth: 75,
   searchBoxRadius: 9,
+  fontFamily: 'system',
+  fontShadow: true,
+  fontSize: 13,
+  searchEngines: DEFAULT_SEARCH_ENGINES.map((engine) => ({ ...engine })),
+  searchEngineId: 'google',
 };
 
 const DEFAULT_BACKGROUND_IMAGE = 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=80';
@@ -181,12 +224,6 @@ const BUILT_IN_WALLPAPERS = [
   'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=2400&q=80',
   'https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=2400&q=80',
 ];
-const SEARCH_ENGINES: Record<SearchEngine, { label: string; url: string }> = {
-  google: { label: 'G', url: 'https://www.google.com/search?q=' },
-  bing: { label: 'B', url: 'https://www.bing.com/search?q=' },
-  baidu: { label: '百', url: 'https://www.baidu.com/s?wd=' },
-};
-const SEARCH_ENGINE_ORDER: SearchEngine[] = ['google', 'bing', 'baidu'];
 const PREVIEW_PREFS_KEY = 'url_archive_preview_new_tab_prefs';
 
 let prefs: Prefs = DEFAULT_PREFS;
@@ -197,13 +234,17 @@ let currentPage = 0;
 let totalPages = 1;
 let isScrolling = false;
 let searchTimer: number | undefined;
+let engineSaveTimer: number | undefined;
 let dashboardRequestSeq = 0;
 let prefsSaveSeq = 0;
 let importingBookmarks = false;
 let clippingRecentPage = false;
-let searchEngine: SearchEngine = 'google';
 let drawerAutoCloseTimer: number | undefined;
 let domeInstance: DomeGallery | null = null;
+let revisitCards: DashboardCard[] = [];
+let revisitIndex = 0;
+let revisitRotateTimer: number | undefined;
+let revisitFlashTimer: number | undefined;
 
 const PREVIEW_CARDS: DashboardCard[] = [
   previewCard('https://app.tapnow.ai', 'TapNow | 你的智能体创意画布', 'app.tapnow.ai', '书签栏 / AI绘画', 'bookmark', ['AI', '创意'], '智能体创意画布和视觉工作台'),
@@ -281,16 +322,17 @@ async function refreshDashboard() {
 
 async function resolveDashboardImages(data: DashboardData): Promise<DashboardData> {
   const cards = await Promise.all(
-    data.cards.map(async (card) => {
-      if (!card.faviconUrl || !isImageKey(card.faviconUrl)) return card;
-      const resolved = await loadImage(imageKey(card.faviconUrl));
-      return resolved ? { ...card, faviconUrl: resolved } : card;
-    }),
+    data.cards.map(resolveDashboardCardImage),
   );
-  const revisit = data.revisit && data.revisit.faviconUrl && isImageKey(data.revisit.faviconUrl)
-    ? { ...data.revisit, faviconUrl: (await loadImage(imageKey(data.revisit.faviconUrl))) || data.revisit.faviconUrl }
-    : data.revisit;
-  return { ...data, cards, revisit };
+  const revisit = data.revisit ? await resolveDashboardCardImage(data.revisit) : data.revisit;
+  const revisits = data.revisits ? await Promise.all(data.revisits.map(resolveDashboardCardImage)) : data.revisits;
+  return { ...data, cards, revisit, revisits };
+}
+
+async function resolveDashboardCardImage(card: DashboardCard): Promise<DashboardCard> {
+  if (!card.faviconUrl || !isImageKey(card.faviconUrl)) return card;
+  const resolved = await loadImage(imageKey(card.faviconUrl));
+  return resolved ? { ...card, faviconUrl: resolved } : card;
 }
 
 function renderDashboard(data: DashboardData, query: string, folder: string) {
@@ -313,9 +355,11 @@ async function openEditPanel(card: DashboardCard) {
   editTitleEl.value = card.title || '';
   renderEditFolderOptions(card.folder || '');
   editFaviconUrlEl.value = card.faviconUrl || '';
-  await renderEditIconPreview(card);
+  // 先展示面板并取消待折叠计时，避免异步渲染期间书签栏误触发自动折叠
   editPanelEl.hidden = false;
+  window.clearTimeout(drawerAutoCloseTimer);
   editTitleEl.focus();
+  await renderEditIconPreview(card);
 }
 
 function closeEditPanel() {
@@ -432,7 +476,7 @@ function mapToDomeItems(cards: DashboardCard[]): DomeItem[] {
   return cards
     .filter((card) => card.url)
     .map((card) => ({
-      src: card.faviconUrl,
+      src: faviconSource(card).src,
       title: card.title || card.url,
       url: card.url,
       initial: (card.initial || card.domain || '?').slice(0, 1).toUpperCase(),
@@ -448,9 +492,39 @@ function renderDome(cards: DashboardCard[]) {
   domeInstance.setItems(mapToDomeItems(cards));
 }
 
+function emptyCardsHtml(query: string): string {
+  const hasSavedItems = (dashboardData?.stats.total ?? 0) > 0;
+  if (query || hasSavedItems) {
+    return `
+      <article class="bookmark-card empty-card">
+        <div class="card-title">没有匹配的收藏</div>
+        <div class="card-meta">${query ? '换个关键词试试，或按 Enter 搜索网页' : '导入或剪藏后会显示在这里'}</div>
+      </article>
+    `;
+  }
+
+  return `
+    <article class="bookmark-card empty-card onboarding-card">
+      <div class="empty-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-7-4-7 4V5Z"/>
+          <path d="M9 8h6"/>
+          <path d="M9 12h4"/>
+        </svg>
+      </div>
+      <div class="card-title">导入浏览器书签</div>
+      <div class="card-meta">首次使用可一键导入 Chrome 书签，导入后会自动生成分类和图标网格。</div>
+      <div class="empty-actions">
+        <button class="empty-import-action" type="button">立即导入书签</button>
+        <button class="empty-settings-action" type="button">更多设置</button>
+      </div>
+    </article>
+  `;
+}
+
 function renderCards(cards: DashboardCard[], query: string) {
   if (!cards.length) {
-    cardsEl.innerHTML = `<article class="bookmark-card empty-card"><div class="card-title">没有匹配的收藏</div><div class="card-meta">${query ? '换个关键词试试，或按 Enter 搜索网页' : '导入或剪藏后会显示在这里'}</div></article>`;
+    cardsEl.innerHTML = emptyCardsHtml(query);
     pageIndicatorEl.innerHTML = '';
     cardsEl.style.transform = '';
     return;
@@ -482,45 +556,33 @@ function renderCards(cards: DashboardCard[], query: string) {
 
 function renderPageIndicator() {
   if (totalPages <= 1) {
-    pageIndicatorEl.innerHTML = '';
+    pageIndicatorEl.replaceChildren();
     return;
   }
 
-  const pages = new Set<number>([0, totalPages - 1]);
-  for (let i = currentPage - 2; i <= currentPage + 2; i += 1) {
-    if (i >= 0 && i < totalPages) pages.add(i);
+  // 胶囊分页指示器：每 3 页为一组，长条在组内循环移动，令每次翻页都有动效
+  const groupStart = Math.floor(currentPage / 3) * 3;
+  const count = Math.min(3, totalPages - groupStart);
+
+  // 复用已有圆点元素（不重建 DOM），保证 CSS 宽度过渡生效、长条平滑伸缩
+  while (pageIndicatorEl.childElementCount > count) {
+    pageIndicatorEl.lastElementChild?.remove();
+  }
+  while (pageIndicatorEl.childElementCount < count) {
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.className = 'page-dot';
+    pageIndicatorEl.appendChild(dot);
   }
 
-  const items: Array<number | 'ellipsis'> = [];
-  let previous = -1;
-  for (const page of [...pages].sort((a, b) => a - b)) {
-    if (previous >= 0 && page - previous > 1) items.push('ellipsis');
-    items.push(page);
-    previous = page;
+  const dots = pageIndicatorEl.children;
+  for (let i = 0; i < count; i += 1) {
+    const page = groupStart + i;
+    const dot = dots[i] as HTMLButtonElement;
+    dot.dataset.page = String(page);
+    dot.classList.toggle('active', page === currentPage);
+    dot.setAttribute('aria-label', `第 ${page + 1} 页，共 ${totalPages} 页`);
   }
-
-  pageIndicatorEl.replaceChildren(
-    ...items.map((item) => {
-      if (item === 'ellipsis') {
-        const ellipsis = document.createElement('span');
-        ellipsis.className = 'page-ellipsis';
-        ellipsis.textContent = '...';
-        ellipsis.setAttribute('aria-hidden', 'true');
-        return ellipsis;
-      }
-
-      const dot = document.createElement('button');
-      dot.type = 'button';
-      dot.className = `page-dot${item === currentPage ? ' active' : ''}`;
-      dot.textContent = String(item + 1);
-      dot.setAttribute('aria-label', `第 ${item + 1} 页，共 ${totalPages} 页`);
-      dot.addEventListener('click', () => {
-        currentPage = item;
-        refreshCardsPage();
-      });
-      return dot;
-    }),
-  );
 }
 
 function applyPageTransform(animate: boolean) {
@@ -543,6 +605,20 @@ function goToPage(delta: number) {
   if (next < 0 || next >= totalPages) return;
   currentPage = next;
   refreshCardsPage();
+}
+
+function handlePageWheel(event: WheelEvent) {
+  if (!shouldHandlePageWheel(event)) return;
+  handleCardsWheel(event);
+}
+
+function shouldHandlePageWheel(event: WheelEvent): boolean {
+  if (prefs.galleryMode || totalPages <= 1) return false;
+  const target = event.target;
+  if (!(target instanceof Element)) return true;
+  if (target.closest('input, textarea, select, button, [contenteditable="true"]')) return false;
+  if (target.closest('#settingsPanel, #editPanel, #rightPanel, #rightDrawerHotspot, .bottom-dock, .engine-menu')) return false;
+  return true;
 }
 
 function handleCardsWheel(event: WheelEvent) {
@@ -574,16 +650,61 @@ function renderDetailList(cards: DashboardCard[]) {
 }
 
 function renderWidgets(data: DashboardData) {
-  revisitWidgetEl.innerHTML = data.revisit
-    ? compactCardHtml(data.revisit, 'revisit-card')
-    : '<div>暂无回访建议</div>';
+  stopRevisitRotation();
+  revisitCards = data.revisits?.length
+    ? data.revisits
+    : data.revisit
+      ? [data.revisit]
+      : [];
+  revisitIndex = 0;
+  renderRevisitWidget();
+  startRevisitRotation();
 
   recentWidgetEl.innerHTML = data.recent.length
     ? data.recent.slice(0, 3).map((card) => compactCardHtml(card, 'recent-card')).join('')
     : '<div>暂无最近剪藏</div>';
 
-  bindOpenableItems(revisitWidgetEl);
   bindOpenableItems(recentWidgetEl);
+}
+
+function renderRevisitWidget() {
+  const card = revisitCards[revisitIndex];
+  revisitWidgetEl.classList.remove('is-flashing');
+  revisitWidgetEl.innerHTML = card
+    ? compactCardHtml(card, 'revisit-card')
+    : '<div>暂无回访建议</div>';
+  bindOpenableItems(revisitWidgetEl);
+}
+
+function rotateRevisitWidget() {
+  if (document.visibilityState !== 'visible' || revisitCards.length <= 1) return;
+  revisitIndex = (revisitIndex + 1) % revisitCards.length;
+  renderRevisitWidget();
+  scheduleRevisitFlash();
+}
+
+function scheduleRevisitFlash() {
+  window.clearTimeout(revisitFlashTimer);
+  revisitWidgetEl.classList.remove('is-flashing');
+  if (document.visibilityState !== 'visible' || revisitCards.length <= 1) return;
+  revisitFlashTimer = window.setTimeout(() => {
+    revisitWidgetEl.classList.add('is-flashing');
+  }, Math.max(0, REVISIT_ROTATE_MS - REVISIT_FLASH_MS));
+}
+
+function startRevisitRotation() {
+  window.clearInterval(revisitRotateTimer);
+  scheduleRevisitFlash();
+  if (document.visibilityState !== 'visible' || revisitCards.length <= 1) return;
+  revisitRotateTimer = window.setInterval(rotateRevisitWidget, REVISIT_ROTATE_MS);
+}
+
+function stopRevisitRotation() {
+  window.clearInterval(revisitRotateTimer);
+  window.clearTimeout(revisitFlashTimer);
+  revisitRotateTimer = undefined;
+  revisitFlashTimer = undefined;
+  revisitWidgetEl.classList.remove('is-flashing');
 }
 
 function bindCardEvents(cards: DashboardCard[]) {
@@ -657,13 +778,21 @@ function closeDetailMenus(except?: HTMLElement) {
 function bindFaviconFallbacks(root: HTMLElement) {
   for (const faviconEl of root.querySelectorAll<HTMLImageElement>('.favicon')) {
     faviconEl.addEventListener('error', () => {
+      // 真实图标加载失败时，先用浏览器缓存的站点图标兜底，仍失败再退化为首字母
+      const pageUrl = faviconEl.dataset.pageUrl;
+      if (pageUrl && faviconEl.dataset.service !== 'true') {
+        faviconEl.dataset.service = 'true';
+        faviconEl.src = faviconServiceUrl(pageUrl);
+        return;
+      }
       const fallback = document.createElement('span');
       fallback.className = faviconEl.classList.contains('small-favicon')
         ? 'favicon-fallback small-favicon'
         : 'favicon-fallback';
       fallback.textContent = faviconEl.dataset.initial || '?';
+      fallback.setAttribute('style', faviconEl.dataset.fallbackStyle || '');
       faviconEl.replaceWith(fallback);
-    }, { once: true });
+    });
   }
 }
 
@@ -740,10 +869,76 @@ function bindEvents() {
     }, 160);
   });
 
-  searchEngineToggleEl.addEventListener('click', () => {
-    const nextIndex = (SEARCH_ENGINE_ORDER.indexOf(searchEngine) + 1) % SEARCH_ENGINE_ORDER.length;
-    searchEngine = SEARCH_ENGINE_ORDER[nextIndex];
+  // 引擎按钮：点击弹出引擎列表快速切换当前引擎
+  setupEngineMenu();
+  searchEngineToggleEl.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (engineMenuEl.hidden) openEngineMenu();
+    else closeEngineMenu();
+  });
+
+  // 设置面板：搜索引擎增删改
+  addEngineEl.addEventListener('click', () => {
+    const engines = [...prefs.searchEngines, { id: createEngineId(), name: '', url: '' }];
+    savePrefs({ searchEngines: engines });
+  });
+
+  engineListEl.addEventListener('input', (event) => {
+    const target = event.target as HTMLInputElement;
+    const id = target.closest<HTMLElement>('.engine-row')?.dataset.id;
+    if (!id) return;
+    const engine = prefs.searchEngines.find((item) => item.id === id);
+    if (!engine) return;
+    if (target.classList.contains('engine-name')) engine.name = target.value;
+    else if (target.classList.contains('engine-url')) engine.url = target.value;
     updateSearchEngineButton();
+    window.clearTimeout(engineSaveTimer);
+    engineSaveTimer = window.setTimeout(() => {
+      // 保存时以 DOM 为准，避免异步回写覆盖刚输入的内容
+      savePrefs({ searchEngines: collectEnginesFromDom() });
+    }, 300);
+  });
+
+  engineListEl.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const row = target.closest<HTMLElement>('.engine-row');
+    const id = row?.dataset.id;
+    if (!id) return;
+
+    if (target.closest('.engine-icon')) {
+      // 点击图标 → 上传/替换该引擎的图标
+      pendingIconEngineId = id;
+      engineIconFileEl.click();
+      return;
+    }
+    if (target.closest('.engine-delete')) {
+      const engines = prefs.searchEngines.filter((item) => item.id !== id);
+      const update: Partial<Prefs> = { searchEngines: engines };
+      if (prefs.searchEngineId === id) update.searchEngineId = engines[0]?.id ?? '';
+      savePrefs(update);
+    }
+  });
+
+  engineIconFileEl.addEventListener('change', async () => {
+    const file = engineIconFileEl.files?.[0];
+    const id = pendingIconEngineId;
+    engineIconFileEl.value = '';
+    pendingIconEngineId = '';
+    if (!file || !id) return;
+    try {
+      const dataUrl = await resizeImageFile(file, 128, 128, 0.9);
+      const key = toImageKey(`engine-icon-${Date.now()}`);
+      await saveImage(key, dataUrl);
+      const row = engineListEl.querySelector<HTMLElement>(`.engine-row[data-id="${id}"]`);
+      if (row) {
+        row.dataset.icon = key;
+        const iconBtn = row.querySelector<HTMLElement>('.engine-icon');
+        if (iconBtn) await applyEngineIcon(iconBtn, { name: '', icon: key });
+      }
+      await savePrefs({ searchEngines: collectEnginesFromDom() });
+    } catch (error) {
+      setStatus(`图标上传失败：${errorMessage(error)}`);
+    }
   });
 
   for (const button of densityButtons) {
@@ -767,7 +962,9 @@ function bindEvents() {
 
   themeToggleEl.addEventListener('click', () => {
     const nextTheme = prefs.theme === 'dark' ? 'light' : 'dark';
-    savePrefs(nextTheme === 'dark' ? { theme: nextTheme, wallpaperMask: 68 } : { theme: nextTheme });
+    savePrefs(nextTheme === 'dark'
+      ? { theme: nextTheme, wallpaperMask: 68 }
+      : { theme: nextTheme, wallpaperMask: 0 });
   });
 
   drawerToggleEl.addEventListener('click', () => {
@@ -842,6 +1039,19 @@ function bindEvents() {
     });
   }
 
+  cardsEl.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('.empty-import-action')) {
+      event.stopPropagation();
+      importBookmarks();
+      return;
+    }
+    if (target.closest('.empty-settings-action')) {
+      event.stopPropagation();
+      settingsPanelEl.hidden = false;
+    }
+  });
+
   for (const button of settingsButtons) {
     button.addEventListener('click', () => {
       openOptionsPage();
@@ -865,17 +1075,25 @@ function bindEvents() {
     if (event.key === 'Escape') closeDetailMenus();
   });
 
-  aiRecallEl.addEventListener('click', () => {
-    setStatus('AI 找回入口已预留；未配置或请求失败时，本地搜索继续可用。');
-    if (!searchInputEl.value.trim()) {
-      searchInputEl.value = 'AI';
-      currentPage = 0;
-      refreshDashboard();
-    }
-    searchInputEl.focus();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') startRevisitRotation();
+    else stopRevisitRotation();
   });
 
-  cardsViewportEl.addEventListener('wheel', handleCardsWheel, { passive: false });
+  aiRecallEl.addEventListener('click', () => {
+    runAIRecall();
+  });
+
+  document.addEventListener('wheel', handlePageWheel, { passive: false });
+
+  pageIndicatorEl.addEventListener('click', (event) => {
+    const dot = (event.target as HTMLElement).closest<HTMLButtonElement>('.page-dot');
+    if (!dot?.dataset.page) return;
+    const page = Number(dot.dataset.page);
+    if (page === currentPage) return;
+    currentPage = page;
+    refreshCardsPage();
+  });
 
   gridColumnsInputEl.addEventListener('input', () => {
     const value = parseInt(gridColumnsInputEl.value, 10);
@@ -919,6 +1137,25 @@ function bindEvents() {
 
   showLabelsInputEl.addEventListener('change', () => {
     savePrefs({ showLabels: !showLabelsInputEl.checked });
+  });
+
+  iconGlowInputEl.addEventListener('change', () => {
+    savePrefs({ iconGlow: iconGlowInputEl.checked });
+  });
+
+  fontFamilyInputEl.addEventListener('change', () => {
+    const fontFamily = fontFamilyInputEl.value === 'smiley-sans' ? 'smiley-sans' : 'system';
+    savePrefs({ fontFamily });
+  });
+
+  fontShadowInputEl.addEventListener('change', () => {
+    savePrefs({ fontShadow: fontShadowInputEl.checked });
+  });
+
+  fontSizeInputEl.addEventListener('input', () => {
+    const value = parseInt(fontSizeInputEl.value, 10);
+    fontSizeValueEl.value = String(value);
+    savePrefs({ fontSize: value });
   });
 
   galleryModeInputEl.addEventListener('change', () => {
@@ -966,6 +1203,8 @@ function scheduleDrawerClose() {
   if (!editPanelEl.hidden) return;
   window.clearTimeout(drawerAutoCloseTimer);
   drawerAutoCloseTimer = window.setTimeout(() => {
+    // 计时结束时再次确认：编辑面板已打开则保持展开，避免中断编辑
+    if (!editPanelEl.hidden) return;
     closeEditPanel();
     savePrefs({ rightPanelCollapsed: true });
   }, 360);
@@ -974,9 +1213,55 @@ function scheduleDrawerClose() {
 function openWebSearch() {
   const query = searchInputEl.value.trim();
   if (!query) return;
-  const engine = SEARCH_ENGINES[searchEngine];
-  const url = `${engine.url}${encodeURIComponent(query)}`;
+  const engine = getCurrentEngine();
+  if (!engine?.url) return;
+  const encoded = encodeURIComponent(query);
+  const url = engine.url.includes('%s') ? engine.url.replaceAll('%s', encoded) : `${engine.url}${encoded}`;
   openTab(url);
+}
+
+async function runAIRecall() {
+  const query = searchInputEl.value.trim();
+  if (!query) {
+    setStatus('输入想找回的内容后，再点击 AI 找回。');
+    searchInputEl.focus();
+    return;
+  }
+
+  aiRecallEl.disabled = true;
+  aiRecallEl.textContent = '找回中';
+  setStatus('AI 正在理解你的找回意图...');
+
+  try {
+    const res = await sendRuntimeMessage({
+      type: 'AI_RECALL',
+      query,
+      folder: currentFolder,
+    }) as RuntimeResponse<AIRecallResponse>;
+
+    if (!res?.ok || !res.data || !res.recall) {
+      throw new Error(res?.error ?? 'AI 找回失败');
+    }
+
+    dashboardData = res.data;
+    currentPage = 0;
+    renderDashboard(res.data, query, currentFolder);
+    const count = res.data.cards.length;
+    const recallTerms = res.recall.query ? `：${res.recall.query}` : '';
+    setStatus(`AI 找回完成，找到 ${count} 条结果${recallTerms}`);
+  } catch (error) {
+    if (isAIConfigError(error)) {
+      setStatus(`AI 找回需要先配置 AI：${errorMessage(error)}。可从右上角设置进入扩展配置。`);
+    } else {
+      setStatus(`AI 找回失败，已使用本地搜索：${errorMessage(error)}`);
+    }
+    currentPage = 0;
+    refreshDashboard();
+  } finally {
+    aiRecallEl.disabled = false;
+    aiRecallEl.textContent = 'AI 找回';
+    searchInputEl.focus();
+  }
 }
 
 async function applyPrefs() {
@@ -1000,9 +1285,18 @@ async function applyPrefs() {
   appEl.style.setProperty('--row-gap', `${prefs.rowGap}px`);
   appEl.style.setProperty('--search-box-width', String(prefs.searchBoxWidth));
   appEl.style.setProperty('--search-box-radius', `${prefs.searchBoxRadius}px`);
+  appEl.style.setProperty(
+    '--page-font-family',
+    prefs.fontFamily === 'smiley-sans'
+      ? '"Smiley Sans", Inter, "SF Pro Display", "Segoe UI", system-ui, sans-serif'
+      : 'Inter, "SF Pro Display", "Segoe UI", system-ui, sans-serif',
+  );
+  appEl.style.setProperty('--page-font-size', `${prefs.fontSize}px`);
   appEl.classList.toggle('hide-labels', !prefs.showLabels);
   appEl.classList.toggle('hide-search-box', !prefs.searchBoxVisible);
   appEl.classList.toggle('gallery-mode', prefs.galleryMode);
+  appEl.classList.toggle('font-shadow', prefs.fontShadow);
+  appEl.classList.toggle('icon-glow', prefs.iconGlow);
   domeGalleryEl.hidden = !prefs.galleryMode;
 
   gridColumnsInputEl.value = String(prefs.gridColumns);
@@ -1022,6 +1316,11 @@ async function applyPrefs() {
   wallpaperBlurInputEl.value = String(prefs.wallpaperBlur);
   wallpaperBlurValueEl.value = `${prefs.wallpaperBlur}%`;
   showLabelsInputEl.checked = !prefs.showLabels;
+  iconGlowInputEl.checked = prefs.iconGlow;
+  fontFamilyInputEl.value = prefs.fontFamily;
+  fontShadowInputEl.checked = prefs.fontShadow;
+  fontSizeInputEl.value = String(prefs.fontSize);
+  fontSizeValueEl.value = String(prefs.fontSize);
   galleryModeInputEl.checked = prefs.galleryMode;
   searchBoxVisibleInputEl.checked = !prefs.searchBoxVisible;
   searchBoxWidthInputEl.value = String(prefs.searchBoxWidth);
@@ -1038,10 +1337,153 @@ async function applyPrefs() {
     button.classList.toggle('active', columns === prefs.gridColumns && rows === prefs.gridRows);
   }
   updateSearchEngineButton();
+  // 结构变化（增删）时才重建配置列表，避免编辑输入时丢失焦点
+  if (engineListEl.childElementCount !== prefs.searchEngines.length) {
+    renderEngineList();
+  }
+}
+
+function createEngineId(): string {
+  return crypto.randomUUID?.() ?? `engine-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getCurrentEngine(): SearchEngineConfig | undefined {
+  return prefs.searchEngines.find((engine) => engine.id === prefs.searchEngineId) ?? prefs.searchEngines[0];
+}
+
+function engineLabel(engine: { name: string }): string {
+  return (engine.name.trim()[0] ?? '?').toUpperCase();
+}
+
+// 有图标显示图标，否则回退为名称首字母
+async function applyEngineIcon(target: HTMLElement, engine: { name: string; icon?: string } | undefined) {
+  const resolved = engine?.icon ? await resolveImageUrl(engine.icon) : null;
+  if (resolved) {
+    const img = document.createElement('img');
+    img.className = 'engine-icon-img';
+    img.src = resolved;
+    img.alt = engine?.name ?? '';
+    target.replaceChildren(img);
+  } else {
+    target.textContent = engine ? engineLabel(engine) : '?';
+  }
 }
 
 function updateSearchEngineButton() {
-  searchEngineToggleEl.textContent = SEARCH_ENGINES[searchEngine].label;
+  const engine = getCurrentEngine();
+  searchEngineToggleEl.title = engine ? `当前搜索引擎：${engine.name || '(未命名)'}（点击切换）` : '未配置搜索引擎';
+  void applyEngineIcon(searchEngineToggleEl, engine);
+}
+
+function collectEnginesFromDom(): SearchEngineConfig[] {
+  return [...engineListEl.querySelectorAll<HTMLElement>('.engine-row')].map((row) => {
+    const engine: SearchEngineConfig = {
+      id: row.dataset.id ?? createEngineId(),
+      name: (row.querySelector('.engine-name') as HTMLInputElement).value,
+      url: (row.querySelector('.engine-url') as HTMLInputElement).value,
+    };
+    if (row.dataset.icon) engine.icon = row.dataset.icon;
+    return engine;
+  });
+}
+
+function renderEngineList() {
+  engineListEl.replaceChildren(
+    ...prefs.searchEngines.map((engine) => {
+      const row = document.createElement('div');
+      row.className = 'engine-row';
+      row.dataset.id = engine.id;
+      if (engine.icon) row.dataset.icon = engine.icon;
+
+      const icon = document.createElement('button');
+      icon.className = 'engine-icon';
+      icon.type = 'button';
+      icon.title = '上传图标';
+      icon.setAttribute('aria-label', '上传搜索引擎图标');
+      void applyEngineIcon(icon, engine);
+
+      const name = document.createElement('input');
+      name.className = 'engine-name';
+      name.type = 'text';
+      name.placeholder = '名称';
+      name.value = engine.name;
+
+      const url = document.createElement('input');
+      url.className = 'engine-url';
+      url.type = 'text';
+      url.placeholder = 'https://…?q=%s';
+      url.value = engine.url;
+
+      const del = document.createElement('button');
+      del.className = 'engine-delete';
+      del.type = 'button';
+      del.title = '删除';
+      del.setAttribute('aria-label', '删除搜索引擎');
+      del.textContent = '×';
+
+      row.append(icon, name, url, del);
+      return row;
+    }),
+  );
+}
+
+function setupEngineMenu() {
+  engineMenuEl = document.createElement('div');
+  engineMenuEl.className = 'engine-menu';
+  engineMenuEl.setAttribute('role', 'listbox');
+  engineMenuEl.hidden = true;
+  document.body.appendChild(engineMenuEl);
+
+  engineMenuEl.addEventListener('click', (event) => {
+    const item = (event.target as HTMLElement).closest<HTMLButtonElement>('.engine-menu-item');
+    if (!item?.dataset.id) return;
+    closeEngineMenu();
+    savePrefs({ searchEngineId: item.dataset.id });
+    searchInputEl.focus();
+  });
+  document.addEventListener('click', (event) => {
+    if (engineMenuEl.hidden) return;
+    const target = event.target as Node;
+    if (engineMenuEl.contains(target) || searchEngineToggleEl.contains(target)) return;
+    closeEngineMenu();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !engineMenuEl.hidden) closeEngineMenu();
+  });
+  window.addEventListener('resize', () => {
+    if (!engineMenuEl.hidden) closeEngineMenu();
+  });
+}
+
+function openEngineMenu() {
+  // 每次打开按最新配置渲染，挂在 body 上按钮定位，避开搜索框 overflow:hidden 裁剪
+  engineMenuEl.replaceChildren(
+    ...prefs.searchEngines.map((engine) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = `engine-menu-item${engine.id === prefs.searchEngineId ? ' active' : ''}`;
+      item.dataset.id = engine.id;
+      item.setAttribute('role', 'option');
+      const mark = document.createElement('span');
+      mark.className = 'engine-menu-mark';
+      void applyEngineIcon(mark, engine);
+      const name = document.createElement('span');
+      name.className = 'engine-menu-name';
+      name.textContent = engine.name || '(未命名)';
+      item.append(mark, name);
+      return item;
+    }),
+  );
+  const rect = searchEngineToggleEl.getBoundingClientRect();
+  engineMenuEl.style.left = `${rect.left}px`;
+  engineMenuEl.style.top = `${rect.bottom + 8}px`;
+  engineMenuEl.hidden = false;
+  searchEngineToggleEl.setAttribute('aria-expanded', 'true');
+}
+
+function closeEngineMenu() {
+  engineMenuEl.hidden = true;
+  searchEngineToggleEl.setAttribute('aria-expanded', 'false');
 }
 
 async function savePrefs(update: Partial<Prefs>) {
@@ -1104,7 +1546,7 @@ async function importBookmarks() {
   if (importingBookmarks) return;
 
   importingBookmarks = true;
-  for (const button of importButtons) {
+  for (const button of getImportActionButtons()) {
     button.disabled = true;
   }
 
@@ -1125,10 +1567,17 @@ async function importBookmarks() {
     setStatus(`导入失败：${errorMessage(error)}`);
   } finally {
     importingBookmarks = false;
-    for (const button of importButtons) {
+    for (const button of getImportActionButtons()) {
       button.disabled = false;
     }
   }
+}
+
+function getImportActionButtons(): HTMLButtonElement[] {
+  return [
+    ...importButtons,
+    ...cardsEl.querySelectorAll<HTMLButtonElement>('.empty-import-action'),
+  ];
 }
 
 async function sendRuntimeMessage(message: Record<string, unknown>): Promise<unknown> {
@@ -1336,13 +1785,49 @@ function compactCardHtml(card: DashboardCard, className: string): string {
   `;
 }
 
+// 用浏览器已缓存的站点图标（chrome _favicon 服务），比猜测 /favicon.ico 更可靠、不会挂起
+function faviconServiceUrl(pageUrl: string, size = 64): string {
+  const url = new URL(chrome.runtime.getURL('/_favicon/'));
+  url.searchParams.set('pageUrl', pageUrl);
+  url.searchParams.set('size', String(size));
+  return url.toString();
+}
+
+// faviconUrl 是否只是 origin/favicon.ico 的猜测值（并非真实捕获/自定义的图标）
+function isGuessedFavicon(card: DashboardCard): boolean {
+  if (!card.faviconUrl) return false;
+  try {
+    return card.faviconUrl === `${new URL(card.url).origin}/favicon.ico`;
+  } catch {
+    return false;
+  }
+}
+
+// 图标显示源：优先真实捕获/自定义图标，其次浏览器缓存图标，最后由调用方回退首字母
+function faviconSource(card: DashboardCard): { src: string; isService: boolean } {
+  if (card.faviconUrl && !isGuessedFavicon(card)) return { src: card.faviconUrl, isService: false };
+  if (/^https?:/i.test(card.url)) return { src: faviconServiceUrl(card.url), isService: true };
+  return { src: '', isService: false };
+}
+
 function faviconHtml(card: DashboardCard, extraClass = ''): string {
   const initial = (card.initial || card.domain || '?').slice(0, 1).toUpperCase();
   const className = extraClass ? `favicon ${extraClass}` : 'favicon';
-  if (!card.faviconUrl) {
-    return `<span class="favicon-fallback${extraClass ? ` ${escapeAttr(extraClass)}` : ''}">${escapeHtml(initial)}</span>`;
+  const colorStyle = domainColorStyle(card.domain || card.url);
+  const { src, isService } = faviconSource(card);
+  if (!src) {
+    return `<span class="favicon-fallback${extraClass ? ` ${escapeAttr(extraClass)}` : ''}" style="${escapeAttr(colorStyle)}">${escapeHtml(initial)}</span>`;
   }
-  return `<img class="${escapeAttr(className)}" src="${escapeAttr(card.faviconUrl)}" alt="" data-initial="${escapeAttr(initial)}" />`;
+  return `<img class="${escapeAttr(className)}" src="${escapeAttr(src)}" alt="" data-page-url="${escapeAttr(card.url)}" data-service="${isService ? 'true' : ''}" data-initial="${escapeAttr(initial)}" data-fallback-style="${escapeAttr(colorStyle)}" />`;
+}
+
+function domainColorStyle(seed: string): string {
+  let hash = 0;
+  for (const char of seed) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+  const hue = hash % 360;
+  return `--fallback-hue: ${hue}; --fallback-bg: hsl(${hue} 54% 44%); --fallback-bg-soft: hsl(${hue} 62% 58%)`;
 }
 
 function categoryButton(label: string, folder: string, count: number, extraClass = ''): HTMLButtonElement {
@@ -1376,6 +1861,25 @@ function folderName(path: string): string {
   return parts.at(-1) ?? path;
 }
 
+function normalizeEngines(value: unknown): SearchEngineConfig[] {
+  if (!Array.isArray(value)) return DEFAULT_SEARCH_ENGINES.map((engine) => ({ ...engine }));
+  const engines = value
+    .filter((raw): raw is SearchEngineConfig =>
+      !!raw && typeof raw === 'object'
+      && typeof (raw as SearchEngineConfig).id === 'string'
+      && typeof (raw as SearchEngineConfig).name === 'string'
+      && typeof (raw as SearchEngineConfig).url === 'string')
+    .map((raw) => {
+      const engine: SearchEngineConfig = { id: raw.id, name: raw.name, url: raw.url };
+      const icon = typeof raw.icon === 'string' && raw.icon
+        ? raw.icon
+        : DEFAULT_SEARCH_ENGINES.find((preset) => preset.id === engine.id)?.icon;
+      if (icon) engine.icon = icon;
+      return engine;
+    });
+  return engines.length ? engines : DEFAULT_SEARCH_ENGINES.map((engine) => ({ ...engine }));
+}
+
 function normalizePrefs(value: Partial<Prefs>): Prefs {
   const normalized: Prefs = {
     density: value.density === 'compact' || value.density === 'large' ? value.density : 'standard',
@@ -1396,9 +1900,17 @@ function normalizePrefs(value: Partial<Prefs>): Prefs {
     rowGap: clampInt(value.rowGap, DEFAULT_PREFS.rowGap, 0, 120),
     showLabels: typeof value.showLabels === 'boolean' ? value.showLabels : DEFAULT_PREFS.showLabels,
     galleryMode: typeof value.galleryMode === 'boolean' ? value.galleryMode : DEFAULT_PREFS.galleryMode,
+    iconGlow: typeof value.iconGlow === 'boolean' ? value.iconGlow : DEFAULT_PREFS.iconGlow,
     searchBoxVisible: typeof value.searchBoxVisible === 'boolean' ? value.searchBoxVisible : DEFAULT_PREFS.searchBoxVisible,
     searchBoxWidth: clampInt(value.searchBoxWidth, DEFAULT_PREFS.searchBoxWidth, 50, 100),
     searchBoxRadius: clampInt(value.searchBoxRadius, DEFAULT_PREFS.searchBoxRadius, 0, 50),
+    fontFamily: value.fontFamily === 'smiley-sans' ? 'smiley-sans' : DEFAULT_PREFS.fontFamily,
+    fontShadow: typeof value.fontShadow === 'boolean' ? value.fontShadow : DEFAULT_PREFS.fontShadow,
+    fontSize: clampInt(value.fontSize, DEFAULT_PREFS.fontSize, 10, 18),
+    searchEngines: normalizeEngines(value.searchEngines),
+    searchEngineId: typeof value.searchEngineId === 'string' && value.searchEngineId
+      ? value.searchEngineId
+      : DEFAULT_PREFS.searchEngineId,
   };
   if (
     normalized.gridColumns === 5 &&
@@ -1412,6 +1924,20 @@ function normalizePrefs(value: Partial<Prefs>): Prefs {
       gridColumns: DEFAULT_PREFS.gridColumns,
       gridRows: DEFAULT_PREFS.gridRows,
       cardRadius: DEFAULT_PREFS.cardRadius,
+      columnGap: DEFAULT_PREFS.columnGap,
+      rowGap: DEFAULT_PREFS.rowGap,
+    };
+  }
+  if (
+    normalized.gridColumns === 6 &&
+    normalized.gridRows === 3 &&
+    normalized.cardRadius === DEFAULT_PREFS.cardRadius &&
+    normalized.iconSize === DEFAULT_PREFS.iconSize &&
+    normalized.columnGap === 38 &&
+    normalized.rowGap === 44
+  ) {
+    return {
+      ...normalized,
       columnGap: DEFAULT_PREFS.columnGap,
       rowGap: DEFAULT_PREFS.rowGap,
     };
@@ -1449,6 +1975,13 @@ function setStatus(message: string) {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isAIConfigError(error: unknown): boolean {
+  const message = errorMessage(error);
+  return message.includes('未配置 AI API 端点')
+    || message.includes('未配置 AI API Key')
+    || message.includes('未配置 AI 模型');
 }
 
 function cssUrl(value: string): string {

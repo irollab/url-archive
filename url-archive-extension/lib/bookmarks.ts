@@ -5,6 +5,7 @@ interface BookmarkNode {
   title?: string;
   url?: string;
   dateAdded?: number;
+  dateLastUsed?: number;
   children?: BookmarkNode[];
 }
 
@@ -30,6 +31,7 @@ function walkBookmarkNodes(nodes: BookmarkNode[], folders: string[], clips: Save
         .filter(Boolean)
         .slice(-3);
       const clipped = node.dateAdded ? new Date(node.dateAdded).toISOString() : importedAt;
+      const lastVisited = node.dateLastUsed ? new Date(node.dateLastUsed).toISOString() : '';
 
       clips.push({
         url: normalizedUrl,
@@ -39,7 +41,8 @@ function walkBookmarkNodes(nodes: BookmarkNode[], folders: string[], clips: Save
         path: `browser-bookmarks/${slugify(`${parsed.hostname}-${title || parsed.pathname || 'bookmark'}`)}.md`,
         source: 'bookmark',
         folder,
-        faviconUrl: faviconUrlFor(parsed),
+        // 不再猜测 /favicon.ico；由新标签页按站点 URL 取浏览器缓存图标，避免存入无效地址
+        faviconUrl: '',
         summary: folder ? `浏览器书签，位于：${folder}` : '浏览器书签',
         tags: unique(['浏览器书签', ...folderTags]),
         keywords: folderTags,
@@ -49,7 +52,7 @@ function walkBookmarkNodes(nodes: BookmarkNode[], folders: string[], clips: Save
         clipped,
         queued: false,
         revived: 0,
-        lastVisited: '',
+        lastVisited,
       });
       continue;
     }
@@ -58,10 +61,6 @@ function walkBookmarkNodes(nodes: BookmarkNode[], folders: string[], clips: Save
       walkBookmarkNodes(node.children, [...folders, title], clips, importedAt);
     }
   }
-}
-
-function faviconUrlFor(url: URL): string {
-  return `${url.origin}/favicon.ico`;
 }
 
 function normalizeBookmarkUrl(url: string): string {

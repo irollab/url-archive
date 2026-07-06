@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { loadNewTabPrefs, replaceNewTabPrefs, saveNewTabPrefs } from './preferences';
+import { DEFAULT_SEARCH_ENGINES, loadNewTabPrefs, replaceNewTabPrefs, saveNewTabPrefs } from './preferences';
 
 let store: Record<string, unknown>;
 
@@ -18,7 +18,7 @@ beforeEach(() => {
 describe('new tab preferences', () => {
   test('loads defaults when no preferences are saved', async () => {
     await expect(loadNewTabPrefs()).resolves.toEqual({
-      density: 'standard',
+      density: 'large',
       theme: 'light',
       rightPanelCollapsed: false,
       backgroundImageUrl: '',
@@ -28,13 +28,19 @@ describe('new tab preferences', () => {
       gridRows: 3,
       cardRadius: 24,
       iconSize: 100,
-      columnGap: 42,
-      rowGap: 54,
+      columnGap: 48,
+      rowGap: 50,
       showLabels: true,
-      galleryMode: false,
+      galleryMode: true,
+      iconGlow: true,
       searchBoxVisible: true,
       searchBoxWidth: 75,
       searchBoxRadius: 9,
+      fontFamily: 'system',
+      fontShadow: true,
+      fontSize: 13,
+      searchEngines: DEFAULT_SEARCH_ENGINES,
+      searchEngineId: 'google',
     });
   });
 
@@ -54,9 +60,15 @@ describe('new tab preferences', () => {
       rowGap: 50,
       showLabels: false,
       galleryMode: true,
+      iconGlow: false,
       searchBoxVisible: false,
       searchBoxWidth: 92,
       searchBoxRadius: 18,
+      fontFamily: 'smiley-sans',
+      fontShadow: false,
+      fontSize: 16,
+      searchEngines: DEFAULT_SEARCH_ENGINES,
+      searchEngineId: 'google',
     });
     await expect(loadNewTabPrefs()).resolves.toEqual({
       density: 'compact',
@@ -73,9 +85,15 @@ describe('new tab preferences', () => {
       rowGap: 50,
       showLabels: false,
       galleryMode: true,
+      iconGlow: false,
       searchBoxVisible: false,
       searchBoxWidth: 92,
       searchBoxRadius: 18,
+      fontFamily: 'smiley-sans',
+      fontShadow: false,
+      fontSize: 16,
+      searchEngines: DEFAULT_SEARCH_ENGINES,
+      searchEngineId: 'google',
     });
   });
 
@@ -98,6 +116,9 @@ describe('new tab preferences', () => {
       searchBoxVisible: false,
       searchBoxWidth: 50,
       searchBoxRadius: 50,
+      fontFamily: 'smiley-sans',
+      fontShadow: false,
+      fontSize: 18,
     });
     await replaceNewTabPrefs({
       density: 'large',
@@ -110,13 +131,19 @@ describe('new tab preferences', () => {
       gridRows: 3,
       cardRadius: 24,
       iconSize: 100,
-      columnGap: 42,
-      rowGap: 54,
+      columnGap: 48,
+      rowGap: 50,
       showLabels: true,
       galleryMode: false,
+      iconGlow: true,
       searchBoxVisible: true,
       searchBoxWidth: 75,
       searchBoxRadius: 9,
+      fontFamily: 'system',
+      fontShadow: true,
+      fontSize: 13,
+      searchEngines: DEFAULT_SEARCH_ENGINES,
+      searchEngineId: 'google',
     });
     await expect(loadNewTabPrefs()).resolves.toEqual({
       density: 'large',
@@ -129,13 +156,19 @@ describe('new tab preferences', () => {
       gridRows: 3,
       cardRadius: 24,
       iconSize: 100,
-      columnGap: 42,
-      rowGap: 54,
+      columnGap: 48,
+      rowGap: 50,
       showLabels: true,
       galleryMode: false,
+      iconGlow: true,
       searchBoxVisible: true,
       searchBoxWidth: 75,
       searchBoxRadius: 9,
+      fontFamily: 'system',
+      fontShadow: true,
+      fontSize: 13,
+      searchEngines: DEFAULT_SEARCH_ENGINES,
+      searchEngineId: 'google',
     });
   });
 
@@ -157,9 +190,12 @@ describe('new tab preferences', () => {
       searchBoxVisible: 'yes',
       searchBoxWidth: 1000,
       searchBoxRadius: -1,
+      fontFamily: 'comic-sans',
+      fontShadow: 'no',
+      fontSize: 99,
     };
     await expect(loadNewTabPrefs()).resolves.toEqual({
-      density: 'standard',
+      density: 'large',
       theme: 'light',
       rightPanelCollapsed: false,
       backgroundImageUrl: '',
@@ -169,21 +205,27 @@ describe('new tab preferences', () => {
       gridRows: 3,
       cardRadius: 24,
       iconSize: 100,
-      columnGap: 42,
-      rowGap: 54,
+      columnGap: 48,
+      rowGap: 50,
       showLabels: true,
-      galleryMode: false,
+      galleryMode: true,
+      iconGlow: true,
       searchBoxVisible: true,
       searchBoxWidth: 75,
       searchBoxRadius: 9,
+      fontFamily: 'system',
+      fontShadow: true,
+      fontSize: 13,
+      searchEngines: DEFAULT_SEARCH_ENGINES,
+      searchEngineId: 'google',
     });
   });
 
   test('normalizes galleryMode', async () => {
     store.new_tab_prefs = { galleryMode: 'yes' };
-    await expect(loadNewTabPrefs()).resolves.toMatchObject({ galleryMode: false });
-
-    store.new_tab_prefs = { galleryMode: true };
     await expect(loadNewTabPrefs()).resolves.toMatchObject({ galleryMode: true });
+
+    store.new_tab_prefs = { galleryMode: false };
+    await expect(loadNewTabPrefs()).resolves.toMatchObject({ galleryMode: false });
   });
 });
