@@ -103,7 +103,7 @@ export class DomeGallery {
 - 品牌底色块：由域名 hash 生成稳定 HSL（如 `hue = hash(domain) % 360`，固定饱和度/亮度），保证同站点颜色一致。
 - 居中放大的 favicon `<img>`；`error` 时回退为首字母色块（复用现有 fallback 思路）。
 - 底部可选标题（受 `showLabels` 影响，与网格模式一致）。
-- `grayscale` 关闭。`--overlay-blur-color` 设为透明或跟随主题，让新标签页壁纸透出。
+- `grayscale` 关闭。`--overlay-blur-color` 设为透明或跟随主题，让新标签页页面背景透出。
 
 ## 交互（先放大预览再打开）
 
