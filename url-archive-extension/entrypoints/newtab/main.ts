@@ -193,7 +193,7 @@ const REVISIT_FLASH_MS = 3000;
 const DEFAULT_PREFS: Prefs = {
   density: 'large',
   theme: 'light',
-  rightPanelCollapsed: false,
+  rightPanelCollapsed: true,
   backgroundImageUrl: '',
   wallpaperMask: 58,
   wallpaperBlur: 0,

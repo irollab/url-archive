@@ -20,7 +20,7 @@ describe('new tab preferences', () => {
     await expect(loadNewTabPrefs()).resolves.toEqual({
       density: 'large',
       theme: 'light',
-      rightPanelCollapsed: false,
+      rightPanelCollapsed: true,
       backgroundImageUrl: '',
       wallpaperMask: 58,
       wallpaperBlur: 0,
@@ -197,7 +197,7 @@ describe('new tab preferences', () => {
     await expect(loadNewTabPrefs()).resolves.toEqual({
       density: 'large',
       theme: 'light',
-      rightPanelCollapsed: false,
+      rightPanelCollapsed: true,
       backgroundImageUrl: '',
       wallpaperMask: 58,
       wallpaperBlur: 0,

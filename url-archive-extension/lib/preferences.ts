@@ -47,7 +47,7 @@ export const DEFAULT_SEARCH_ENGINES: NewTabSearchEngine[] = [
 const DEFAULT_PREFS: NewTabPrefs = {
   density: 'large',
   theme: 'light',
-  rightPanelCollapsed: false,
+  rightPanelCollapsed: true,
   backgroundImageUrl: '',
   wallpaperMask: 58,
   wallpaperBlur: 0,

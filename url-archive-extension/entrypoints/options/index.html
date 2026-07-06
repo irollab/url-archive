@@ -1,44 +1,120 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-  <head><meta charset="UTF-8" /><title>URL Archive 设置</title></head>
-  <body style="font-family: system-ui, sans-serif; max-width: 480px; margin: 24px auto;">
-    <h2>URL Archive 设置</h2>
-    <fieldset>
-      <legend>AI（BYOK）</legend>
-      <label>API 端点 <input id="llmBaseUrl" style="width:100%" placeholder="https://open.bigmodel.cn/api/paas/v4" /></label>
-      <label>API Key <input id="llmApiKey" type="password" style="width:100%" /></label>
-      <label>模型 <input id="llmModel" style="width:100%" placeholder="glm-5.2" /></label>
-      <button id="testAi" type="button">测试 AI</button>
-      <p id="aiStatus" style="font-size:12px;color:#555;min-height:18px;"></p>
-    </fieldset>
-    <fieldset>
-      <legend>Obsidian 写入方式</legend>
-      <label>写入通道
-        <select id="vaultTarget" style="width:100%">
-          <option value="official">URL Archive 官方插件（推荐，无需额外安装）</option>
-          <option value="restApi">Obsidian Local REST API 插件</option>
-        </select>
-      </label>
-      <p style="font-size:12px;color:#555;margin:4px 0 0;">
-        选择「官方插件」时，请在 Obsidian 的 URL Archive 插件设置里开启本地服务，并把其 Token 填到下方对应栏位。
-      </p>
-    </fieldset>
-    <fieldset id="officialFields">
-      <legend>URL Archive 官方插件</legend>
-      <label>地址 <input id="officialApiUrl" style="width:100%" placeholder="http://127.0.0.1:27125" /></label>
-      <label>Token <input id="officialApiToken" type="password" style="width:100%" /></label>
-    </fieldset>
-    <fieldset id="restApiFields">
-      <legend>Obsidian Local REST API</legend>
-      <label>地址 <input id="restApiUrl" style="width:100%" /></label>
-      <label>Token <input id="restApiToken" type="password" style="width:100%" /></label>
-    </fieldset>
-    <fieldset>
-      <legend>通用</legend>
-      <label>vault 文件夹 <input id="vaultFolder" style="width:100%" /></label>
-    </fieldset>
-    <button id="save">保存</button>
-    <span id="saved"></span>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>URL Archive 设置</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="masthead">
+        <span class="mark"><img src="/icon/IROLLAB_dark.svg" alt="" /></span>
+        <div>
+          <h1>URL Archive</h1>
+          <p>扩展设置 · AI 智能处理与 Obsidian 写入</p>
+        </div>
+      </header>
+
+      <div class="card">
+        <!-- AI -->
+        <section class="section">
+          <div class="section-head"><span class="dot"></span><h2>AI 智能处理（BYOK）</h2></div>
+          <p class="section-desc">自带 API Key，剪藏时自动生成摘要、标签、关键词与回访场景。兼容 OpenAI 格式端点。</p>
+
+          <div class="field">
+            <label for="llmBaseUrl">API 端点</label>
+            <input id="llmBaseUrl" type="url" placeholder="https://open.bigmodel.cn/api/paas/v4" />
+          </div>
+          <div class="field">
+            <label for="llmApiKey">API Key</label>
+            <div class="input-row">
+              <input id="llmApiKey" type="password" placeholder="sk-..." autocomplete="off" />
+              <button class="icon-btn" type="button" data-reveal="llmApiKey" title="显示/隐藏" aria-label="显示或隐藏"></button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="llmModel">模型</label>
+            <input id="llmModel" placeholder="glm-5.2" />
+          </div>
+          <div class="action-row">
+            <button id="testAi" class="btn" type="button">测试 AI</button>
+            <span id="aiStatus" class="status"></span>
+          </div>
+        </section>
+
+        <!-- Obsidian 写入 -->
+        <section class="section">
+          <div class="section-head"><span class="dot"></span><h2>Obsidian 写入</h2></div>
+          <p class="section-desc">选择剪藏落盘的通道。推荐使用 URL Archive 官方插件，无需额外安装 Local REST API。</p>
+
+          <input id="vaultTarget" type="hidden" />
+          <div class="segmented" role="tablist" aria-label="写入通道">
+            <button type="button" role="tab" data-target="official">
+              官方插件<span class="seg-sub">推荐 · 免额外安装</span>
+            </button>
+            <button type="button" role="tab" data-target="restApi">
+              Local REST API<span class="seg-sub">第三方插件</span>
+            </button>
+          </div>
+
+          <!-- 官方插件 -->
+          <div id="officialFields" class="endpoint">
+            <div class="field">
+              <label for="officialApiUrl">服务地址</label>
+              <input id="officialApiUrl" type="url" placeholder="http://127.0.0.1:27125" />
+              <span class="hint">在 Obsidian 的 URL Archive 插件设置中开启「剪藏服务」，端口需一致。</span>
+            </div>
+            <div class="field">
+              <label for="officialApiToken">访问 Token</label>
+              <div class="input-row">
+                <input id="officialApiToken" type="password" placeholder="从插件设置复制" autocomplete="off" />
+                <button class="icon-btn" type="button" data-reveal="officialApiToken" title="显示/隐藏" aria-label="显示或隐藏"></button>
+              </div>
+            </div>
+            <div class="action-row">
+              <button class="btn" type="button" data-test-vault="official">测试连接</button>
+              <span class="status" data-vault-status="official"></span>
+            </div>
+          </div>
+
+          <!-- Local REST API -->
+          <div id="restApiFields" class="endpoint">
+            <div class="field">
+              <label for="restApiUrl">服务地址</label>
+              <input id="restApiUrl" type="url" placeholder="http://127.0.0.1:27123" />
+            </div>
+            <div class="field">
+              <label for="restApiToken">Token</label>
+              <div class="input-row">
+                <input id="restApiToken" type="password" placeholder="Local REST API 的 API Key" autocomplete="off" />
+                <button class="icon-btn" type="button" data-reveal="restApiToken" title="显示/隐藏" aria-label="显示或隐藏"></button>
+              </div>
+            </div>
+            <div class="action-row">
+              <button class="btn" type="button" data-test-vault="restApi">测试连接</button>
+              <span class="status" data-vault-status="restApi"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 通用 -->
+        <section class="section">
+          <div class="section-head"><span class="dot"></span><h2>通用</h2></div>
+          <div class="field">
+            <label for="vaultFolder">vault 文件夹</label>
+            <input id="vaultFolder" placeholder="URL Archive" />
+            <span class="hint">剪藏笔记在 vault 中的存放目录。</span>
+          </div>
+        </section>
+      </div>
+
+      <footer class="footer">
+        <span id="saved" class="save-hint"></span>
+        <button id="save" class="btn primary" type="button">保存设置</button>
+      </footer>
+    </div>
+
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
