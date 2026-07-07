@@ -9,6 +9,7 @@ node_modules/
 .obsidian/
 .serena/
 .superpowers/
+.spec-workflow/
 .vscode/
 .idea/
 .DS_Store
