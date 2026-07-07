@@ -8,6 +8,7 @@ import {
   saveImage,
   toImageKey,
 } from '@/lib/image-store';
+import { attachImageLightbox } from '@/lib/lightbox';
 import { DomeGallery, type DomeItem } from './dome-gallery';
 
 const appEl = document.getElementById('app') as HTMLElement;
@@ -240,6 +241,7 @@ let prefsSaveSeq = 0;
 let importingBookmarks = false;
 let clippingRecentPage = false;
 let drawerAutoCloseTimer: number | undefined;
+let hotspotHideTimer: number | undefined;
 let domeInstance: DomeGallery | null = null;
 let revisitCards: DashboardCard[] = [];
 let revisitIndex = 0;
@@ -267,6 +269,7 @@ async function init() {
   await loadPrefs();
   await refreshDashboard();
   bindEvents();
+  attachImageLightbox('.donate-codes img');
   searchInputEl.focus();
 }
 
@@ -981,6 +984,13 @@ function bindEvents() {
     openDrawerTemporarily();
   });
 
+  // 鼠标滑向右侧边缘时显露入口，静止 3s 后自动隐藏
+  window.addEventListener('mousemove', (event) => {
+    if (event.clientX >= window.innerWidth - HOTSPOT_REVEAL_ZONE) {
+      revealHotspot();
+    }
+  });
+
   rightPanelEl.addEventListener('mouseenter', () => {
     window.clearTimeout(drawerAutoCloseTimer);
   });
@@ -1210,6 +1220,21 @@ function scheduleDrawerClose() {
   }, 360);
 }
 
+/** 鼠标进入右侧这个宽度内即视为“滑向右侧”，显露书签入口 */
+const HOTSPOT_REVEAL_ZONE = 140;
+/** 鼠标静止这么久后自动隐藏入口 */
+const HOTSPOT_IDLE_HIDE_MS = 3000;
+
+/** 显露书签入口，并在鼠标静止 3s 后自动淡出；抽屉已展开（入口不可用）时跳过 */
+function revealHotspot() {
+  if (rightDrawerHotspotEl.hidden) return;
+  rightDrawerHotspotEl.classList.add('revealed');
+  window.clearTimeout(hotspotHideTimer);
+  hotspotHideTimer = window.setTimeout(() => {
+    rightDrawerHotspotEl.classList.remove('revealed');
+  }, HOTSPOT_IDLE_HIDE_MS);
+}
+
 function openWebSearch() {
   const query = searchInputEl.value.trim();
   if (!query) return;
@@ -1271,6 +1296,12 @@ async function applyPrefs() {
   appEl.classList.toggle('right-panel-open', !prefs.rightPanelCollapsed);
   rightPanelEl.classList.toggle('open', !prefs.rightPanelCollapsed);
   rightDrawerHotspotEl.hidden = !prefs.rightPanelCollapsed;
+  if (prefs.rightPanelCollapsed) {
+    revealHotspot(); // 首次加载与每次关闭抽屉后：先回显入口，再 3s 自动隐藏
+  } else {
+    window.clearTimeout(hotspotHideTimer);
+    rightDrawerHotspotEl.classList.remove('revealed');
+  }
   const resolvedUrl = await resolveImageUrl(prefs.backgroundImageUrl);
   const imageUrl = resolvedUrl || DEFAULT_BACKGROUND_IMAGE;
   appEl.style.setProperty('--wallpaper-image', `url("${cssUrl(imageUrl)}")`);

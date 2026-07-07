@@ -928,25 +928,38 @@ button {
 .drawer-hotspot {
   position: fixed;
   z-index: 7;
-  bottom: 24px;
-  right: 24px;
+  top: 50%;
+  right: 0;
+  /* 默认滑出右缘并淡出，鼠标滑向右侧时才显露 */
+  transform: translate(calc(100% + 6px), -50%);
+  opacity: 0;
+  pointer-events: none;
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 26px;
+  height: 76px;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, .42);
-  border-radius: 999px;
+  border-right: none;
+  border-radius: 16px 0 0 16px;
   background: rgba(255, 255, 255, .18);
   color: var(--text);
   box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
   backdrop-filter: blur(12px);
   font-size: 20px;
+  transition: opacity .22s ease, transform .22s ease;
 }
 
+.drawer-hotspot.revealed {
+  transform: translateY(-50%);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 向左扩大命中区，鼠标往右边缘一划即可触达 */
 .drawer-hotspot::after {
   content: "";
   position: absolute;
-  inset: -14px;
+  inset: -20px -6px -20px -22px;
 }
 
 .drawer-hotspot[hidden] {
@@ -1288,6 +1301,19 @@ button {
   opacity: .72;
 }
 
+.footer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: inherit;
+  text-decoration: none;
+  transition: opacity .15s ease;
+}
+
+.footer-link:hover {
+  text-decoration: underline;
+}
+
 .settings-panel,
 .edit-panel {
   position: fixed;
@@ -1389,6 +1415,43 @@ button {
   color: var(--ink-muted);
   font-size: 12px;
   font-weight: 760;
+}
+
+/* ---------- 打赏 ---------- */
+.donate-note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
+.donate-codes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.donate-codes figure {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .6);
+  text-align: center;
+}
+
+.donate-codes img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.donate-codes figcaption {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-muted);
 }
 
 .mini-action {
@@ -1802,6 +1865,11 @@ button {
   background: rgba(255, 255, 255, .06);
 }
 
+.theme-dark .donate-codes figure {
+  border-color: rgba(255, 255, 255, .12);
+  background: rgba(255, 255, 255, .06);
+}
+
 .theme-dark .detail-item,
 .theme-dark .dock-action,
 .theme-dark .wide-action,
@@ -2036,11 +2104,16 @@ button {
     line-height: 1.2;
   }
 
-  .drawer-hotspot {
+  /* 窄屏：入口固定在左上角常显，不参与右侧滑动显隐 */
+  .drawer-hotspot,
+  .drawer-hotspot.revealed {
     top: 20px;
     right: auto;
     left: 18px;
     bottom: auto;
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .bookmark-drawer {

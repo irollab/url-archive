@@ -1,5 +1,6 @@
 import { loadSettings, saveSettings } from '@/lib/settings';
 import { enrichClip } from '@/lib/llm';
+import { attachImageLightbox } from '@/lib/lightbox';
 import type { Settings, VaultTarget } from '@/lib/types';
 
 const fields: (keyof Settings)[] = [
@@ -134,5 +135,7 @@ async function testVault(target: VaultTarget) {
 document.querySelectorAll<HTMLButtonElement>('[data-test-vault]').forEach((btn) => {
   btn.addEventListener('click', () => testVault(btn.dataset.testVault as VaultTarget));
 });
+
+attachImageLightbox('.donate-codes img');
 
 init();

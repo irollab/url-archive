@@ -1,0 +1,29 @@
+# 依赖与构建产物
+node_modules/
+.output/
+.output-fixed/
+.output-check/
+.wxt/
+
+# 工具/编辑器本地目录
+.obsidian/
+.serena/
+.superpowers/
+.vscode/
+.idea/
+.DS_Store
+
+# 本地 vault 与工作区（非代码库内容）
+/URL Archive/
+/URL Archive Reviews/
+
+# 根目录临时素材（截图 / 录屏 / 散图）
+/IROLLAB_dark.svg
+/A_*.png
+/B_*.png
+/CaptureX_*.png
+/ScreenShot_*.png
+/*.mp4
+
+# 日志
+*.log
