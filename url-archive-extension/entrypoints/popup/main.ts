@@ -1,4 +1,5 @@
 import { enrichStatusText } from '@/lib/enrich-status';
+import { mountReauthBanner } from '@/lib/reauth-banner';
 
 const whyEl = document.getElementById('why') as HTMLTextAreaElement;
 const btn = document.getElementById('clip') as HTMLButtonElement;
@@ -81,6 +82,7 @@ let revisitFlashTimer: number | undefined;
 let scrollbarHideTimer: number | undefined;
 
 searchEl.focus();
+void mountReauthBanner(document.body);
 
 function showTransientScrollbar() {
   updateScrollbarOverlay();

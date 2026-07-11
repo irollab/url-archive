@@ -9,6 +9,8 @@ import {
   toImageKey,
 } from '@/lib/image-store';
 import { attachImageLightbox } from '@/lib/lightbox';
+import { mountReauthBanner } from '@/lib/reauth-banner';
+import { requestOriginAccess } from '@/lib/permissions';
 import { DomeGallery, type DomeItem } from './dome-gallery';
 
 const appEl = document.getElementById('app') as HTMLElement;
@@ -269,6 +271,7 @@ async function init() {
   await loadPrefs();
   await refreshDashboard();
   bindEvents();
+  void mountReauthBanner(appEl);
   attachImageLightbox('.donate-codes img');
   searchInputEl.focus();
 }
@@ -1068,7 +1071,12 @@ function bindEvents() {
     });
   }
 
-  clipCurrentEl.addEventListener('click', () => {
+  clipCurrentEl.addEventListener('click', async () => {
+    const granted = await requestOriginAccess(['http://*/*', 'https://*/*']);
+    if (!granted) {
+      setStatus('已跳过：可在目标网页用扩展图标「剪藏本页」。');
+      return;
+    }
     captureRecentPage();
   });
 

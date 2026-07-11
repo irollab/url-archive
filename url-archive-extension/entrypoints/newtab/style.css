@@ -2368,3 +2368,27 @@ button {
   text-shadow: 0 2px 8px rgba(0, 0, 0, .5);
 }
 #app.hide-labels .dg-card-title { display: none; }
+
+.reauth-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin: 0 0 10px;
+  border-radius: 10px;
+  background: rgba(255, 193, 7, .16);
+  border: 1px solid rgba(255, 193, 7, .5);
+  font-size: 13px;
+  color: inherit;
+}
+.reauth-banner .reauth-btn {
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: #ffc107;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+.reauth-banner .reauth-btn:disabled { opacity: .6; cursor: default; }
