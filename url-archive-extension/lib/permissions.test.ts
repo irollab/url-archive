@@ -4,7 +4,10 @@ import {
   hasOriginAccess,
   requestOriginAccess,
   MissingHostPermissionError,
+  configuredOrigins,
+  missingConfiguredOrigins,
 } from './permissions';
+import type { Settings } from './types';
 
 function stubPermissions(overrides: Partial<{ contains: unknown; request: unknown }>) {
   (globalThis as any).chrome = {
@@ -14,6 +17,18 @@ function stubPermissions(overrides: Partial<{ contains: unknown; request: unknow
     },
   };
 }
+
+const baseSettings: Settings = {
+  llmBaseUrl: 'https://api.openai.com/v1',
+  llmApiKey: 'k',
+  llmModel: 'm',
+  vaultTarget: 'restApi',
+  restApiUrl: 'http://127.0.0.1:27123',
+  restApiToken: 't',
+  officialApiUrl: 'http://127.0.0.1:27125',
+  officialApiToken: '',
+  vaultFolder: 'URL Archive',
+};
 
 afterEach(() => {
   delete (globalThis as any).chrome;
@@ -73,5 +88,34 @@ describe('MissingHostPermissionError', () => {
     expect(err).toBeInstanceOf(Error);
     expect(err.name).toBe('MissingHostPermissionError');
     expect(err.origin).toBe('https://a.com/*');
+  });
+});
+
+describe('configuredOrigins', () => {
+  test('含 vault(restApi) 与 llm origin，去重去端口', () => {
+    expect(configuredOrigins(baseSettings).sort()).toEqual(
+      ['http://127.0.0.1/*', 'https://api.openai.com/*'].sort(),
+    );
+  });
+  test('空 baseUrl 端点被跳过', () => {
+    const s = { ...baseSettings, llmBaseUrl: '', restApiUrl: '' };
+    expect(configuredOrigins(s)).toEqual([]);
+  });
+  test('official 通道用 officialApiUrl', () => {
+    const s = { ...baseSettings, vaultTarget: 'official' as const, llmBaseUrl: '' };
+    expect(configuredOrigins(s)).toEqual(['http://127.0.0.1/*']);
+  });
+});
+
+describe('missingConfiguredOrigins', () => {
+  test('仅返回未授权的 origin', async () => {
+    (globalThis as any).chrome = {
+      permissions: {
+        contains: vi.fn(({ origins }: { origins: string[] }) =>
+          Promise.resolve(origins[0] === 'http://127.0.0.1/*')),
+      },
+    };
+    const missing = await missingConfiguredOrigins(baseSettings);
+    expect(missing).toEqual(['https://api.openai.com/*']);
   });
 });
