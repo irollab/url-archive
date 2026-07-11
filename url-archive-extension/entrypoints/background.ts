@@ -22,6 +22,7 @@ import {
 import type { ClipData } from '@/lib/types';
 import type { NewTabPrefs } from '@/lib/preferences';
 import type { EnrichStatus } from '@/lib/enrich-status';
+import { hasOriginAccess, originPattern, MissingHostPermissionError } from '@/lib/permissions';
 
 type ExtractResult = {
   title: string;
@@ -135,12 +136,6 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function isMissingContentScriptError(error: unknown): boolean {
-  const message = getErrorMessage(error);
-  return message.includes('Could not establish connection')
-    || message.includes('Receiving end does not exist');
-}
-
 function canInjectIntoTab(url: string | undefined): boolean {
   if (!url) return false;
   try {
@@ -153,28 +148,25 @@ function canInjectIntoTab(url: string | undefined): boolean {
 
 async function requestExtract(tab: chrome.tabs.Tab): Promise<ExtractResult> {
   if (!tab.id) throw new Error('无法获取当前标签页');
-
+  if (!canInjectIntoTab(tab.url)) {
+    throw new Error('当前页面不支持剪藏：请在普通 http/https 网页中使用');
+  }
   try {
-    return await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT' }) as ExtractResult;
-  } catch (error) {
-    if (!isMissingContentScriptError(error)) {
-      throw error;
-    }
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: [CONTENT_SCRIPT_FILE],
+    });
+  } catch (injectError) {
+    throw new Error(`无法在当前页面注入剪藏脚本：${getErrorMessage(injectError)}`);
+  }
+  return await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT' }) as ExtractResult;
+}
 
-    if (!canInjectIntoTab(tab.url)) {
-      throw new Error('当前页面不支持剪藏：请在普通 http/https 网页中使用');
-    }
-
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: [CONTENT_SCRIPT_FILE],
-      });
-    } catch (injectError) {
-      throw new Error(`无法在当前页面注入剪藏脚本：${getErrorMessage(injectError)}`);
-    }
-
-    return await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT' }) as ExtractResult;
+// 写 vault 前确认已授权对应 host；缺失则抛 MissingHostPermissionError（后台无手势，不能静默申请）
+async function ensureVaultAccess(settings: Awaited<ReturnType<typeof loadSettings>>): Promise<void> {
+  const origin = originPattern(resolveVaultEndpoint(settings).baseUrl);
+  if (origin && !(await hasOriginAccess([origin]))) {
+    throw new MissingHostPermissionError(origin);
   }
 }
 
@@ -211,6 +203,7 @@ async function handleCaptureFromTab(
     clippedAt: new Date().toISOString(),
   };
 
+  await ensureVaultAccess(settings);
   const writer = createVaultWriter(settings);
 
   // Phase A：秒级写入占位笔记，立即返回给弹出页
@@ -238,6 +231,10 @@ async function enrichInBackground(
 
   if (hasLlmConfig(settings)) {
     try {
+      const llmOrigin = originPattern(settings.llmBaseUrl);
+      if (llmOrigin && !(await hasOriginAccess([llmOrigin]))) {
+        throw new MissingHostPermissionError(llmOrigin);
+      }
       const enriched = await enrichAndRewrite(clip, why, settings, { enrich: enrichClip, writer, queue });
       await saveClipForRevisit(enriched.savedClip);
       status = 'done';
@@ -304,6 +301,10 @@ async function handleDashboardData(query: string, folder: string) {
 
 async function handleAIRecall(query: string, folder: string) {
   const settings = await loadSettings();
+  const llmOrigin = originPattern(settings.llmBaseUrl);
+  if (llmOrigin && !(await hasOriginAccess([llmOrigin]))) {
+    throw new MissingHostPermissionError(llmOrigin);
+  }
   const recall = await recallQuery(query, settings);
   const clips = await loadSavedClips();
   let data = buildDashboardData(clips, { query: recall.query, folder });
