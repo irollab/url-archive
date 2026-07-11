@@ -2,7 +2,7 @@
   "name": "url-archive-extension",
   "description": "一键把网页剪藏进 Obsidian，AI 自动摘要与标签。",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "dev": "wxt",
