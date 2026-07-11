@@ -6,6 +6,10 @@ export default defineContentScript({
   // 自动写回 host_permissions（即便 registration: 'runtime'），与本任务收窄默认权限的目标冲突。
   registration: 'runtime',
   main() {
+    // 按需注入会对同一标签页重复执行本脚本；用标记避免累积多个 onMessage 监听器
+    const w = window as unknown as { __uaExtractBound?: boolean };
+    if (w.__uaExtractBound) return;
+    w.__uaExtractBound = true;
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (msg?.type === 'EXTRACT') {
         const result = extractArticle(document);

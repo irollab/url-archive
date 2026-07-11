@@ -100,8 +100,8 @@ el('save').addEventListener('click', async () => {
 el('testAi').addEventListener('click', async () => {
   const status = el('aiStatus');
   setStatus(status, '测试中…', 'busy');
-  await ensureEndpointAccess([collectSettings().llmBaseUrl]);
   try {
+    await ensureEndpointAccess([collectSettings().llmBaseUrl]);
     const result = await enrichClip({
       url: 'https://example.com/test',
       title: 'URL Archive AI 配置测试',
@@ -129,11 +129,11 @@ async function testVault(target: VaultTarget) {
     return;
   }
 
-  await ensureEndpointAccess([base]);
   setStatus(status, '连接中…', 'busy');
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), 4000);
   try {
+    await ensureEndpointAccess([base]);
     const res = await fetch(`${base}/`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       signal: ctrl.signal,
