@@ -1,5 +1,6 @@
 import { enrichStatusText } from '@/lib/enrich-status';
 import { mountReauthBanner } from '@/lib/reauth-banner';
+import { requestOriginAccess } from '@/lib/permissions';
 
 const whyEl = document.getElementById('why') as HTMLTextAreaElement;
 const btn = document.getElementById('clip') as HTMLButtonElement;
@@ -562,6 +563,21 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 });
 
+// 缺 host 权限的错误（来自 background 的 MissingHostPermissionError.message）→ 提供一键重新授权
+function maybeOfferReauth(statusEl: HTMLElement, error: string) {
+  if (!error.includes('重新授权')) return;
+  const reauthBtn = document.createElement('button');
+  reauthBtn.type = 'button';
+  reauthBtn.className = 'reauth-btn';
+  reauthBtn.textContent = '重新授权';
+  reauthBtn.addEventListener('click', async () => {
+    reauthBtn.disabled = true;
+    const ok = await requestOriginAccess(['http://*/*', 'https://*/*']);
+    reauthBtn.textContent = ok ? '已授权，请重试剪藏' : '授权被拒绝';
+  });
+  statusEl.appendChild(reauthBtn);
+}
+
 btn.addEventListener('click', async () => {
   btn.disabled = true;
   statusEl.textContent = '剪藏中…';
@@ -576,6 +592,7 @@ btn.addEventListener('click', async () => {
   } else {
     statusEl.textContent = `✗ 失败：${res?.error ?? '未知错误'}`;
     btn.disabled = false;
+    maybeOfferReauth(statusEl, res?.error ?? '');
   }
 });
 
