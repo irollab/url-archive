@@ -68,6 +68,22 @@ export function planSemanticIndex(
   return { reuse, tasks, removed };
 }
 
+/** 移除指定 path 的向量；无匹配时返回原数组引用（便于调用方判断是否需要持久化） */
+export function removeVectorForPath(vectors: SemanticVector[], path: string): SemanticVector[] {
+  if (!vectors.some((vector) => vector.path === path)) return vectors;
+  return vectors.filter((vector) => vector.path !== path);
+}
+
+/** 把 oldPath 的向量改名为 newPath（保留 embedding/hash，改名无需重嵌）；无匹配返回原引用 */
+export function renameVectorPath(
+  vectors: SemanticVector[],
+  oldPath: string,
+  newPath: string,
+): SemanticVector[] {
+  if (!vectors.some((vector) => vector.path === oldPath)) return vectors;
+  return vectors.map((vector) => (vector.path === oldPath ? { ...vector, path: newPath } : vector));
+}
+
 export function buildEmbeddingText(entry: UrlArchiveEntry): string {
   return [
     entry.title,

@@ -1,4 +1,5 @@
 import type { Settings } from './types';
+import { withTimeout, VAULT_TIMEOUT_MS } from './http';
 
 export class VaultWriteError extends Error {
   constructor(message: string, readonly retryable: boolean) {
@@ -11,7 +12,8 @@ function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
 }
 
-const defaultFetch: typeof fetch = (...args) => fetch(...args);
+// 加超时：Obsidian 未响应时快速失败并转入离线队列，避免剪藏卡死
+const defaultFetch: typeof fetch = withTimeout((...args) => fetch(...args), VAULT_TIMEOUT_MS);
 
 function normalizeBearerToken(token: string): string {
   return token.trim().replace(/^Bearer\s+/i, '').trim();

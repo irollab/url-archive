@@ -6,7 +6,18 @@ export interface ChatSettings {
   chatModel: string;
 }
 
-export async function createChatAnswer(prompt: string, settings: ChatSettings): Promise<string> {
+export interface ChatOptions {
+  /** 要求返回严格 JSON（用于补 AI 富集） */
+  jsonMode?: boolean;
+  /** 覆盖默认 system 提示 */
+  system?: string;
+}
+
+export async function createChatAnswer(
+  prompt: string,
+  settings: ChatSettings,
+  opts: ChatOptions = {},
+): Promise<string> {
   const baseUrl = normalizeBaseUrl(settings.chatBaseUrl);
   const apiKey = normalizeBearerToken(settings.chatApiKey);
   const model = settings.chatModel.trim();
@@ -26,8 +37,9 @@ export async function createChatAnswer(prompt: string, settings: ChatSettings): 
     body: JSON.stringify({
       model,
       temperature: 0.2,
+      ...(opts.jsonMode ? { response_format: { type: 'json_object' } } : {}),
       messages: [
-        { role: 'system', content: '你是严谨的私人知识库问答助手。' },
+        { role: 'system', content: opts.system ?? '你是严谨的私人知识库问答助手。' },
         { role: 'user', content: prompt },
       ],
     }),

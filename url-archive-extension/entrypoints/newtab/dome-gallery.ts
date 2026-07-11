@@ -130,6 +130,7 @@ export class DomeGallery {
     this.ro = new ResizeObserver((entries) => this.onResize(entries[0].contentRect));
     this.ro.observe(this.root);
     this.applyTransform();
+    document.addEventListener('visibilitychange', this.onVisibility);
     this.autoRAF = requestAnimationFrame(this.tickAuto);
   }
 
@@ -141,28 +142,58 @@ export class DomeGallery {
       ...tiles.map((t) => this.renderTile(t, rotY, rotX)),
     );
     this.applyTransform();
+    this.ensureAutoRunning();
   }
 
   destroy(): void {
     this.ro.disconnect();
     if (this.inertiaRAF) cancelAnimationFrame(this.inertiaRAF);
-    if (this.autoRAF) cancelAnimationFrame(this.autoRAF);
+    this.stopAuto();
     this.root.classList.remove('dg-scroll-lock');
     this.root.replaceChildren();
     window.removeEventListener('keydown', this.onKey);
+    document.removeEventListener('visibilitychange', this.onVisibility);
   }
 
-  // 自动缓慢旋转：仅在空闲时递增 rotation.y（拖拽/惯性/放大态/容器隐藏时自动暂停）
+  // 自动缓慢旋转：仅在空闲时递增 rotation.y（拖拽/惯性/放大态时暂停一帧渲染）
   private tickAuto = (now: number) => {
+    // 容器隐藏（卡片模式）或页面不可见时，彻底停止 rAF 调度而非空转唤醒；
+    // 再次可见由 onResize / setItems / onVisibility 通过 ensureAutoRunning 重启
+    if (this.root.offsetParent === null || document.hidden) {
+      this.autoRAF = null;
+      this.autoLast = 0;
+      return;
+    }
     const dt = this.autoLast ? (now - this.autoLast) / 1000 : 0;
     this.autoLast = now;
     const idle = !this.dragging && !this.opening && !this.focusedEl && this.inertiaRAF === null;
-    // offsetParent 为 null 表示容器被隐藏（卡片模式），此时不做无谓渲染
-    if (idle && dt > 0 && dt < 0.1 && this.root.offsetParent !== null) {
+    if (idle && dt > 0 && dt < 0.1) {
       this.rotation.y = wrapAngleSigned(this.rotation.y + this.autoRotateDirection * AUTO_ROTATE_DEG_PER_SEC * dt);
       this.applyTransform();
     }
     this.autoRAF = requestAnimationFrame(this.tickAuto);
+  };
+
+  /** 满足运行条件（可见且未在运行）时启动自动旋转循环，重复调用安全 */
+  private ensureAutoRunning() {
+    if (this.autoRAF !== null) return;
+    if (this.root.offsetParent === null || document.hidden) return;
+    this.autoLast = 0;
+    this.autoRAF = requestAnimationFrame(this.tickAuto);
+  }
+
+  private stopAuto() {
+    if (this.autoRAF !== null) {
+      cancelAnimationFrame(this.autoRAF);
+      this.autoRAF = null;
+    }
+    this.autoLast = 0;
+  }
+
+  // 页面可见性切换：隐藏时立即停循环，恢复可见时按条件重启
+  private onVisibility = () => {
+    if (document.hidden) this.stopAuto();
+    else this.ensureAutoRunning();
   };
 
   private buildScaffold() {
@@ -336,6 +367,8 @@ export class DomeGallery {
     this.root.style.setProperty('--radius', `${Math.round(radius)}px`);
     this.root.style.setProperty('--viewer-pad', `${viewerPad}px`);
     this.applyTransform();
+    // 容器由隐藏转为可见会触发 resize，借此恢复自动旋转
+    this.ensureAutoRunning();
   }
 
   private bindPointer() {

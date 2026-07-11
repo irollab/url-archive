@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { entryFromFrontmatter, pickDormantEntry, searchArchive } from './archive-index';
+import { entryFromFrontmatter, extractFrontmatterBlock, pickDormantEntry, searchArchive } from './archive-index';
 
 describe('archive index', () => {
   test('builds an entry from URL Archive frontmatter', () => {
@@ -47,5 +47,15 @@ describe('archive index', () => {
     ];
 
     expect(pickDormantEntry(entries)?.url).toBe('https://b.com');
+  });
+
+  test('extracts leading YAML frontmatter block from clipped markdown', () => {
+    const markdown = '---\nurl: https://example.com/a\ntitle: Example\nai_pending: true\n---\n\n> [!summary] 速览\n正文';
+    const block = extractFrontmatterBlock(markdown);
+    expect(block).toBe('url: https://example.com/a\ntitle: Example\nai_pending: true');
+  });
+
+  test('returns null when markdown has no frontmatter', () => {
+    expect(extractFrontmatterBlock('# 无 frontmatter 的笔记\n正文')).toBeNull();
   });
 });

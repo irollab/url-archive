@@ -2,7 +2,7 @@ import { loadSettings } from '@/lib/settings';
 import { enrichClip, recallQuery } from '@/lib/llm';
 import { createVaultWriter, resolveVaultEndpoint } from '@/lib/vault';
 import { ClipQueue } from '@/lib/queue';
-import { captureClip } from '@/lib/capture';
+import { captureClipFast, enrichAndRewrite } from '@/lib/capture';
 import { clipsFromBookmarkTree } from '@/lib/bookmarks';
 import { buildDashboardData } from '@/lib/dashboard';
 import { loadNewTabPrefs, saveNewTabPrefs } from '@/lib/preferences';
@@ -21,6 +21,7 @@ import {
 } from '@/lib/revisit';
 import type { ClipData } from '@/lib/types';
 import type { NewTabPrefs } from '@/lib/preferences';
+import type { EnrichStatus } from '@/lib/enrich-status';
 
 type ExtractResult = {
   title: string;
@@ -211,13 +212,60 @@ async function handleCaptureFromTab(
   };
 
   const writer = createVaultWriter(settings);
-  const result = await captureClip(clip, why, settings, {
-    enrich: enrichClip,
-    writer,
-    queue,
-  });
+
+  // Phase A：秒级写入占位笔记，立即返回给弹出页
+  const result = await captureClipFast(clip, why, settings, { writer, queue });
   await saveClipForRevisit(result.savedClip);
+
+  // Phase B：后台补 AI 覆盖写（不 await，in-flight fetch 保活 SW；best-effort）
+  void enrichInBackground(clip, why, settings, writer, queue, result.savedClip.canonicalUrl ?? result.savedClip.url);
+
   return result;
+}
+
+// 后台补 AI：成功则覆盖写回并更新索引；失败/中断则保留占位笔记（Phase A 已落盘，不丢失）。
+// 完成后向弹出页广播状态，若弹出页已关闭则忽略。
+async function enrichInBackground(
+  clip: ClipData,
+  why: string,
+  settings: Awaited<ReturnType<typeof loadSettings>>,
+  writer: ReturnType<typeof createVaultWriter>,
+  queue: ClipQueue,
+  canonicalUrl: string,
+) {
+  let status: EnrichStatus = 'skipped';
+  let error: string | undefined;
+
+  if (hasLlmConfig(settings)) {
+    try {
+      const enriched = await enrichAndRewrite(clip, why, settings, { enrich: enrichClip, writer, queue });
+      await saveClipForRevisit(enriched.savedClip);
+      status = 'done';
+    } catch (e) {
+      status = 'failed';
+      error = describeEnrichError(e);
+    }
+  }
+
+  notifyEnriched(canonicalUrl, status, error);
+}
+
+// 把补 AI 的失败原因转成可读文案；超时（AbortError）单独提示，便于用户判断是否需要更快的模型
+function describeEnrichError(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.name === 'AbortError') return 'AI 请求超时';
+    return error.message;
+  }
+  return String(error);
+}
+
+function hasLlmConfig(settings: Awaited<ReturnType<typeof loadSettings>>): boolean {
+  return Boolean(settings.llmBaseUrl.trim() && settings.llmApiKey.trim() && settings.llmModel.trim());
+}
+
+function notifyEnriched(canonicalUrl: string, status: EnrichStatus, error?: string) {
+  // 弹出页已关闭时无接收者，sendMessage 会 reject，忽略即可
+  chrome.runtime.sendMessage({ type: 'CAPTURE_ENRICHED', canonicalUrl, status, error }).catch(() => undefined);
 }
 
 async function findMostRecentCapturableTab() {

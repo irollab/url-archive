@@ -1,5 +1,5 @@
 import { describe, test, expect, vi } from 'vitest';
-import { captureClip } from './capture';
+import { captureClipFast, enrichAndRewrite } from './capture';
 import type { ClipData, Settings, AIResult, QueueItem } from './types';
 import { VaultWriteError, type VaultWriter } from './vault';
 
@@ -49,55 +49,36 @@ function fakeQueue() {
   };
 }
 
-describe('captureClip', () => {
-  test('成功路径：调 AI、写入 vault、written=true', async () => {
+describe('captureClipFast（Phase A：秒级写入，不调 AI）', () => {
+  test('写入占位笔记：ai_pending=true、summary 为空、不调 enrich', async () => {
     const writer = fakeWriter();
     const queue = fakeQueue();
-    const enrich = vi.fn().mockResolvedValue(aiOk);
 
-    const result = await captureClip(clip, '我的意图', settings, { enrich, writer, queue });
+    const result = await captureClipFast(clip, '我的意图', settings, { writer, queue });
 
     expect(result.written).toBe(true);
     expect(writer.written).toHaveLength(1);
+    expect(writer.written[0].path).toMatch(/^URL Archive\/example\.com-a-[a-f0-9]+\.md$/);
+    expect(writer.written[0].content).toContain('ai_pending: true');
+    expect(writer.written[0].content).toContain('AI 摘要待补');
+    expect(writer.written[0].content).toContain('我的意图');
+    expect(writer.written[0].content).toContain('canonical_url: https://example.com/a');
     expect(result.savedClip).toMatchObject({
       url: clip.url,
       canonicalUrl: 'https://example.com/a',
       title: clip.title,
       queued: false,
       revived: 0,
-      keywords: ['财务自动化'],
-      aliases: ['智能记账工具'],
-      intent: '寻找财务 SaaS 时回看',
+      summary: '',
     });
-    expect(writer.written[0].path).toMatch(/^URL Archive\/example\.com-a-[a-f0-9]+\.md$/);
-    expect(writer.written[0].content).toContain('canonical_url: https://example.com/a');
-    expect(writer.written[0].content).toContain('summary: 摘要');
-    expect(writer.written[0].content).toContain('财务自动化');
-    expect(writer.written[0].content).toContain('智能记账工具');
-    expect(writer.written[0].content).toContain('寻找财务 SaaS 时回看');
-    expect(writer.written[0].content).toContain('我的意图');
-    expect(writer.written[0].content).toContain('ai_pending: false');
     expect(queue.items).toHaveLength(0);
   });
 
-  test('AI 失败：仍写入，标记 ai_pending=true，summary 为空', async () => {
-    const writer = fakeWriter();
-    const queue = fakeQueue();
-    const enrich = vi.fn().mockRejectedValue(new Error('boom'));
-
-    const result = await captureClip(clip, '', settings, { enrich, writer, queue });
-
-    expect(result.written).toBe(true);
-    expect(writer.written[0].content).toContain('ai_pending: true');
-    expect(writer.written[0].content).toContain('AI 摘要待补');
-  });
-
-  test('可重试写入失败：入队，written=false', async () => {
+  test('可重试写入失败：入队，written=false、savedClip.queued=true', async () => {
     const writer = fakeWriter(async () => { throw new Error('offline'); });
     const queue = fakeQueue();
-    const enrich = vi.fn().mockResolvedValue(aiOk);
 
-    const result = await captureClip(clip, '', settings, { enrich, writer, queue });
+    const result = await captureClipFast(clip, '', settings, { writer, queue });
 
     expect(result.written).toBe(false);
     expect(result.queuedReason).toBe('offline');
@@ -111,9 +92,55 @@ describe('captureClip', () => {
       throw new VaultWriteError('写入 vault 失败: 401', false);
     });
     const queue = fakeQueue();
+
+    await expect(captureClipFast(clip, '', settings, { writer, queue })).rejects.toThrow('401');
+    expect(queue.items).toHaveLength(0);
+  });
+});
+
+describe('enrichAndRewrite（Phase B：后台补 AI 覆盖写）', () => {
+  test('成功：调 AI、覆盖写 ai_pending=false 且含摘要，savedClip 带 AI 字段', async () => {
+    const writer = fakeWriter();
+    const queue = fakeQueue();
     const enrich = vi.fn().mockResolvedValue(aiOk);
 
-    await expect(captureClip(clip, '', settings, { enrich, writer, queue })).rejects.toThrow('401');
+    const result = await enrichAndRewrite(clip, '我的意图', settings, { enrich, writer, queue });
+
+    expect(enrich).toHaveBeenCalledOnce();
+    expect(result).not.toBeNull();
+    expect(result!.written).toBe(true);
+    expect(writer.written[0].content).toContain('ai_pending: false');
+    expect(writer.written[0].content).toContain('summary: 摘要');
+    expect(writer.written[0].content).toContain('财务自动化');
+    expect(result!.savedClip).toMatchObject({
+      summary: '摘要',
+      keywords: ['财务自动化'],
+      aliases: ['智能记账工具'],
+      intent: '寻找财务 SaaS 时回看',
+      queued: false,
+    });
+  });
+
+  test('覆盖写命中同一路径（与 Phase A 一致），不产生重复文件', async () => {
+    const writer = fakeWriter();
+    const queue = fakeQueue();
+    const fast = await captureClipFast(clip, '', settings, { writer, queue });
+    const enrich = vi.fn().mockResolvedValue(aiOk);
+
+    const enriched = await enrichAndRewrite(clip, '', settings, { enrich, writer, queue });
+
+    expect(enriched!.path).toBe(fast.path);
+    expect(writer.written[0].path).toBe(writer.written[1].path);
+  });
+
+  test('enrich 失败：抛出真实错误，不重写（保留占位笔记）', async () => {
+    const writer = fakeWriter();
+    const queue = fakeQueue();
+    const enrich = vi.fn().mockRejectedValue(new Error('LLM timeout'));
+
+    await expect(enrichAndRewrite(clip, '', settings, { enrich, writer, queue }))
+      .rejects.toThrow('LLM timeout');
+    expect(writer.written).toHaveLength(0);
     expect(queue.items).toHaveLength(0);
   });
 });

@@ -25,4 +25,12 @@ describe('ClipQueue', () => {
     await queue.remove(item.id!);
     expect(await queue.getAll()).toHaveLength(0);
   });
+
+  test('同 path 去重：新入队项覆盖旧项', async () => {
+    await queue.enqueue({ path: 'a.md', content: 'A1', enqueuedAt: '2026-06-23T00:00:00' });
+    await queue.enqueue({ path: 'a.md', content: 'A2', enqueuedAt: '2026-06-23T00:00:01' });
+    const all = await queue.getAll();
+    expect(all).toHaveLength(1);
+    expect(all[0].content).toBe('A2');
+  });
 });

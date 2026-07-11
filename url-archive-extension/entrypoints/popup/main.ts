@@ -1,3 +1,5 @@
+import { enrichStatusText } from '@/lib/enrich-status';
+
 const whyEl = document.getElementById('why') as HTMLTextAreaElement;
 const btn = document.getElementById('clip') as HTMLButtonElement;
 const importBtn = document.getElementById('importBookmarks') as HTMLButtonElement;
@@ -527,16 +529,48 @@ async function refreshStats() {
   statsEl.textContent = `${stats.total} 条收藏 · ${stats.clips} 条剪藏 · ${stats.bookmarks} 个浏览器书签`;
 }
 
+// 追踪后台补 AI（Phase B）：剪藏秒级返回后弹出页保持打开，等 CAPTURE_ENRICHED 广播更新状态
+// 兜底时间略大于 LLM 超时（60s），保证愿意等待时能看到真实结果；用户可随时关闭，后台照常补
+const ENRICH_FALLBACK_MS = 65000;
+let pendingEnrichUrl = '';
+let enrichBaseText = '';
+let enrichFallbackTimer: number | undefined;
+
+function watchEnrich(canonicalUrl: string, baseText: string) {
+  pendingEnrichUrl = canonicalUrl;
+  enrichBaseText = baseText;
+  window.clearTimeout(enrichFallbackTimer);
+  enrichFallbackTimer = window.setTimeout(() => {
+    if (!pendingEnrichUrl) return;
+    pendingEnrichUrl = '';
+    statusEl.textContent = `${baseText} · AI 补充可能仍在后台进行`;
+    btn.disabled = false;
+  }, ENRICH_FALLBACK_MS);
+}
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type !== 'CAPTURE_ENRICHED' || !pendingEnrichUrl || msg.canonicalUrl !== pendingEnrichUrl) return;
+  window.clearTimeout(enrichFallbackTimer);
+  pendingEnrichUrl = '';
+  statusEl.textContent = `${enrichBaseText} · ${enrichStatusText(msg.status, msg.error)}`;
+  if (msg.status === 'done') {
+    setTimeout(() => window.close(), 1200);
+  } else {
+    btn.disabled = false;
+  }
+});
+
 btn.addEventListener('click', async () => {
   btn.disabled = true;
   statusEl.textContent = '剪藏中…';
   const res = await chrome.runtime.sendMessage({ type: 'CAPTURE', why: whyEl.value });
-  if (res?.ok && res.written) {
-    statusEl.textContent = '✓ 已剪藏到 Obsidian';
-    setTimeout(() => window.close(), 800);
-  } else if (res?.ok && !res.written) {
-    statusEl.textContent = `✓ 已暂存（${res.queuedReason ?? 'Obsidian 不可用'}，恢复后自动写入）`;
-    await Promise.all([refreshStats(), searchClips()]);
+  if (res?.ok) {
+    const base = res.written
+      ? '✓ 已剪藏到 Obsidian'
+      : `✓ 已暂存（${res.queuedReason ?? 'Obsidian 不可用'}，恢复后自动写入）`;
+    statusEl.textContent = `${base} · AI 摘要补充中…`;
+    watchEnrich(res.savedClip?.canonicalUrl || res.savedClip?.url || '', base);
+    if (!res.written) await Promise.all([refreshStats(), searchClips()]);
   } else {
     statusEl.textContent = `✗ 失败：${res?.error ?? '未知错误'}`;
     btn.disabled = false;

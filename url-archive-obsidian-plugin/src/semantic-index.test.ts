@@ -4,6 +4,8 @@ import {
   cosineSimilarity,
   hashEmbeddingText,
   planSemanticIndex,
+  removeVectorForPath,
+  renameVectorPath,
   searchSemanticIndex,
   type SemanticVector,
 } from './semantic-index';
@@ -95,5 +97,43 @@ describe('incremental semantic index planning', () => {
     expect(plan.reuse.map((v) => v.path)).toEqual(['a.md']);
     expect(plan.tasks).toHaveLength(0);
     expect(plan.removed).toBe(1);
+  });
+});
+
+describe('removeVectorForPath', () => {
+  const vectors: SemanticVector[] = [
+    { path: 'a.md', embedding: [1, 0], indexedAt: 'now' },
+    { path: 'b.md', embedding: [0, 1], indexedAt: 'now' },
+  ];
+
+  test('移除匹配 path 的向量', () => {
+    const next = removeVectorForPath(vectors, 'a.md');
+    expect(next.map((v) => v.path)).toEqual(['b.md']);
+  });
+
+  test('无匹配时返回原数组引用（便于跳过写盘）', () => {
+    const next = removeVectorForPath(vectors, 'missing.md');
+    expect(next).toBe(vectors);
+  });
+});
+
+describe('renameVectorPath', () => {
+  const vectors: SemanticVector[] = [
+    { path: 'old.md', embedding: [1, 0], indexedAt: 'now', hash: 'h1' },
+    { path: 'b.md', embedding: [0, 1], indexedAt: 'now', hash: 'h2' },
+  ];
+
+  test('把 oldPath 向量改名为 newPath，保留 embedding/hash', () => {
+    const next = renameVectorPath(vectors, 'old.md', 'new.md');
+    const renamed = next.find((v) => v.path === 'new.md');
+    expect(renamed).toBeDefined();
+    expect(renamed?.embedding).toEqual([1, 0]);
+    expect(renamed?.hash).toBe('h1');
+    expect(next.some((v) => v.path === 'old.md')).toBe(false);
+  });
+
+  test('无匹配时返回原数组引用', () => {
+    const next = renameVectorPath(vectors, 'missing.md', 'x.md');
+    expect(next).toBe(vectors);
   });
 });

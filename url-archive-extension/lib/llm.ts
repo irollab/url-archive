@@ -1,4 +1,5 @@
 import type { ClipData, AIResult, Settings } from './types';
+import { withTimeout, LLM_TIMEOUT_MS } from './http';
 
 const SYSTEM_PROMPT =
   '你是收藏助手。根据网页内容，用简体中文返回严格 JSON：' +
@@ -10,7 +11,8 @@ const RECALL_PROMPT =
   '{"query":"3到8个用空格分隔的搜索词","keywords":["关键词1","关键词2"],"aliases":["同义词1","别名2"],"intent":"用户可能想重新打开的内容类型"}。' +
   '优先保留产品名、平台名、技术名、中文关键词和英文关键词；不要输出 JSON 以外的任何内容。';
 
-const defaultFetch: typeof fetch = (...args) => fetch(...args);
+// 加超时：LLM 端点慢/挂起时快速失败，避免阻塞剪藏流程
+const defaultFetch: typeof fetch = withTimeout((...args) => fetch(...args), LLM_TIMEOUT_MS);
 
 function normalizeBearerToken(token: string): string {
   return token.trim().replace(/^Bearer\s+/i, '').trim();

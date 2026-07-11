@@ -730,7 +730,9 @@ button {
   transition: opacity .28s ease;
   pointer-events: none;
   z-index: 1;
-  animation: icon-glow-rotate 4s linear infinite;
+  /* 用 steps() 离散步进代替 60fps 补间：静止时仍自动旋转，但每帧不重绘锥形渐变，
+     20fps（80 步/4s）肉眼几乎无差，却把 175 个 tile 的持续 paint 开销降到约 1/3 */
+  animation: icon-glow-rotate 4s steps(80) infinite;
 }
 
 .icon-glow .bookmark-card:hover .icon-wrap::after,
@@ -2253,13 +2255,14 @@ button {
   cursor: inherit;
   -webkit-tap-highlight-color: transparent;
   transform: translateZ(0);
+  /* 旋转球面上背景实时模糊几乎不可辨，却是最贵的合成操作：改用略提高不透明度的
+     纯半透明白底替代 backdrop-filter，去掉数十层实时模糊，视觉基本一致 */
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, .055));
+    linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .1));
   border: 1px solid rgba(255, 255, 255, .18);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .12),
     0 12px 26px rgba(0, 0, 0, .18);
-  backdrop-filter: blur(14px);
 }
 .dome-gallery .dg-tile--fallback {
   background:

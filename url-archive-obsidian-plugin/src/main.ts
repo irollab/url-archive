@@ -14,11 +14,13 @@ import {
   WorkspaceLeaf,
   addIcon,
   normalizePath,
+  parseYaml,
   setIcon,
 } from 'obsidian';
 import { ClipServer } from './clip-server';
 import {
   entryFromFrontmatter,
+  extractFrontmatterBlock,
   pickDormantEntry,
   searchArchive,
   type ArchiveFrontmatter,
@@ -26,11 +28,17 @@ import {
 } from './archive-index';
 import { createChatAnswer } from './chat-provider';
 import { createEmbedding } from './embedding-provider';
+import { enrichNoteContent } from './enrich';
+import { applySummaryHighlights, extractBodySnapshot } from './note-body';
 import { buildRagContext, type RagSource } from './rag';
 import { buildCurrentNoteQuery, relatedHitsForCurrentNote } from './related';
 import { getDormantEntries, renderDormantReviewMarkdown } from './revival';
 import {
+  buildEmbeddingText,
+  hashEmbeddingText,
   planSemanticIndex,
+  removeVectorForPath,
+  renameVectorPath,
   searchSemanticIndex,
   type SemanticSearchHit,
   type SemanticVector,
@@ -127,6 +135,14 @@ export default class UrlArchivePlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'backfill-url-archive-ai',
+      name: '补全待处理的 AI 摘要',
+      callback: async () => {
+        await this.backfillPendingAi();
+      },
+    });
+
+    this.addCommand({
       id: 'ask-url-archive',
       name: '问答 URL Archive',
       callback: () => {
@@ -178,9 +194,12 @@ export default class UrlArchivePlugin extends Plugin {
       },
     });
 
-    this.registerEvent(this.app.vault.on('create', () => this.rebuildIndex()));
-    this.registerEvent(this.app.vault.on('modify', () => this.rebuildIndex()));
-    this.registerEvent(this.app.vault.on('delete', () => this.rebuildIndex()));
+    // 用 metadataCache 'changed'（frontmatter 解析完成后触发）而非 vault 'create'/'modify'，
+    // 避免索引早于缓存导致新写入的笔记读不到 frontmatter 而漏索引。
+    this.registerEvent(this.app.metadataCache.on('changed', () => this.rebuildIndex()));
+    // 删除/重命名收藏时同步清理语义向量，避免面板「语义向量」数字残留孤儿向量
+    this.registerEvent(this.app.vault.on('delete', (file) => this.onFileDeleted(file.path)));
+    this.registerEvent(this.app.vault.on('rename', (file, oldPath) => this.onFileRenamed(file.path, oldPath)));
     this.addSettingTab(new UrlArchiveSettingTab(this.app, this));
   }
 
@@ -197,6 +216,32 @@ export default class UrlArchivePlugin extends Plugin {
     }
 
     this.entries = entries.sort((a, b) => b.clipped.localeCompare(a.clipped));
+  }
+
+  private inArchiveFolder(path: string): boolean {
+    return path.startsWith(`${this.settings.archiveFolder.replace(/\/+$/, '')}/`);
+  }
+
+  /** 删除笔记：同步移除其语义向量（有变化才写盘），再刷新索引 */
+  private async onFileDeleted(path: string): Promise<void> {
+    await this.applyVectorChange(removeVectorForPath(this.semanticVectors, path));
+    await this.rebuildIndex();
+  }
+
+  /** 重命名笔记：仍在收藏夹则改向量 path（保留向量），移出则删向量，再刷新索引 */
+  private async onFileRenamed(newPath: string, oldPath: string): Promise<void> {
+    const next = this.inArchiveFolder(newPath)
+      ? renameVectorPath(this.semanticVectors, oldPath, newPath)
+      : removeVectorForPath(this.semanticVectors, oldPath);
+    await this.applyVectorChange(next);
+    await this.rebuildIndex();
+  }
+
+  /** 仅当向量数组引用变化时才持久化，避免删/改无关文件时无谓写盘 */
+  private async applyVectorChange(next: SemanticVector[]): Promise<void> {
+    if (next === this.semanticVectors) return;
+    this.semanticVectors = next;
+    await this.savePluginData();
   }
 
   async onunload() {
@@ -268,7 +313,126 @@ export default class UrlArchivePlugin extends Plugin {
     } else {
       await this.app.vault.create(normalized, content);
     }
+    // 直接解析写入内容并入索引（不等异步 metadataCache），确保实时剪藏立即可被“搜索收藏”命中
+    const entry = this.indexEntryFromContent(normalized, content);
+    // 后台补该条语义向量，让语义搜索/问答也能立即命中（best-effort）
+    if (entry) void this.embedClipEntry(entry);
+  }
+
+  /** 从写入的 markdown 解析 frontmatter 并 upsert 单条索引，返回该条目 */
+  private indexEntryFromContent(path: string, content: string): UrlArchiveEntry | null {
+    const block = extractFrontmatterBlock(content);
+    if (!block) return null;
+    let fm: ArchiveFrontmatter;
+    try {
+      fm = (parseYaml(block) ?? {}) as ArchiveFrontmatter;
+    } catch {
+      return null;
+    }
+    const entry = entryFromFrontmatter(path, fm);
+    if (!entry) return null;
+    this.entries = [entry, ...this.entries.filter((item) => item.path !== path)]
+      .sort((a, b) => b.clipped.localeCompare(a.clipped));
+    return entry;
+  }
+
+  /** 为单条剪藏补语义向量：未配置或内容未变则跳过，失败静默（best-effort，等用户手动重建语义索引） */
+  private async embedClipEntry(entry: UrlArchiveEntry): Promise<void> {
+    if (!this.hasEmbeddingConfig()) return;
+    const text = buildEmbeddingText(entry);
+    if (!text.trim()) return;
+    const hash = hashEmbeddingText(text);
+    const prev = this.semanticVectors.find((vector) => vector.path === entry.path);
+    if (prev && prev.hash === hash && prev.embedding.length) return;
+    try {
+      const embedding = await createEmbedding(text, this.settings);
+      this.semanticVectors = [
+        ...this.semanticVectors.filter((vector) => vector.path !== entry.path),
+        { path: entry.path, embedding, indexedAt: new Date().toISOString(), hash },
+      ];
+      await this.savePluginData();
+    } catch (error) {
+      console.error('[URL Archive] 剪藏自动嵌入失败', error);
+    }
+  }
+
+  private hasEmbeddingConfig(): boolean {
+    return Boolean(
+      this.settings.embeddingBaseUrl.trim()
+        && this.settings.embeddingApiKey.trim()
+        && this.settings.embeddingModel.trim(),
+    );
+  }
+
+  private hasChatConfig(): boolean {
+    return Boolean(
+      this.settings.chatBaseUrl.trim()
+        && this.settings.chatApiKey.trim()
+        && this.settings.chatModel.trim(),
+    );
+  }
+
+  /** 批量为 ai_pending: true 的历史剪藏补全 AI 摘要（用插件 chat 模型），回填 frontmatter 与速览要点 */
+  async backfillPendingAi(): Promise<void> {
+    if (!this.hasChatConfig()) {
+      new Notice('请先在设置里配置 Chat API 端点 / Key / 模型');
+      return;
+    }
+
+    const folder = this.settings.archiveFolder.replace(/\/+$/, '');
+    const files = this.app.vault.getMarkdownFiles()
+      .filter((file) => file.path.startsWith(`${folder}/`))
+      .filter((file) => this.app.metadataCache.getFileCache(file)?.frontmatter?.ai_pending === true);
+
+    if (!files.length) {
+      new Notice('没有待补 AI 的收藏（ai_pending: true）');
+      return;
+    }
+
+    new Notice(`开始补全 ${files.length} 条待处理 AI 摘要…`);
+    let done = 0;
+    let failed = 0;
+    for (const file of files) {
+      try {
+        const content = await this.app.vault.read(file);
+        const fm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+        const ai = await enrichNoteContent(
+          {
+            title: String(fm.title ?? '') || file.basename,
+            url: String(fm.url ?? ''),
+            body: extractBodySnapshot(content),
+          },
+          this.settings,
+          createChatAnswer,
+        );
+        // 先更新正文速览要点，再用 processFrontMatter 安全写回 frontmatter
+        await this.app.vault.modify(file, applySummaryHighlights(content, ai.highlights));
+        await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+          frontmatter.summary = ai.summary;
+          frontmatter.tags = ai.tags;
+          frontmatter.keywords = ai.keywords;
+          frontmatter.aliases = ai.aliases;
+          frontmatter.intent = ai.intent;
+          frontmatter.ai_pending = false;
+        });
+        // 用最终内容刷新索引与语义向量
+        const updated = await this.app.vault.read(file);
+        const entry = this.indexEntryFromContent(file.path, updated);
+        if (entry) await this.embedClipEntry(entry);
+        done += 1;
+        if (done % 5 === 0) new Notice(`补全 AI 摘要：${done}/${files.length}`);
+      } catch (error) {
+        failed += 1;
+        console.error(`[URL Archive] 补全 AI 失败：${file.path}`, error);
+      }
+    }
+
     await this.rebuildIndex();
+    if (failed) {
+      new Notice(`补全完成：成功 ${done} 条，失败 ${failed} 条（保留原样）`);
+    } else {
+      new Notice(`补全完成：成功 ${done} 条`);
+    }
   }
 
   private async ensureParentFolder(path: string): Promise<void> {
@@ -768,6 +932,14 @@ class UrlArchivePanelView extends ItemView {
         label: '重建语义索引',
         onClick: async () => {
           await this.plugin.rebuildSemanticIndex();
+          this.render();
+        },
+      },
+      {
+        icon: 'wand',
+        label: '补全待处理 AI 摘要',
+        onClick: async () => {
+          await this.plugin.backfillPendingAi();
           this.render();
         },
       },

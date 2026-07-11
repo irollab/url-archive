@@ -31,6 +31,15 @@ export interface ArchiveFrontmatter {
   last_visited?: unknown;
 }
 
+/**
+ * 从完整 markdown 中截取开头的 YAML frontmatter 文本块（--- ... ---），无则返回 null。
+ * 用于写入剪藏后直接解析 frontmatter，不依赖 Obsidian 异步的 metadataCache。
+ */
+export function extractFrontmatterBlock(markdown: string): string | null {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(markdown);
+  return match ? match[1] : null;
+}
+
 export function entryFromFrontmatter(path: string, fm: ArchiveFrontmatter): UrlArchiveEntry | null {
   const url = toStringValue(fm.url);
   if (!url) return null;
