@@ -1,6 +1,7 @@
 import { loadSettings, saveSettings } from '@/lib/settings';
 import { enrichClip } from '@/lib/llm';
 import { attachImageLightbox } from '@/lib/lightbox';
+import { originPattern, requestOriginAccess } from '@/lib/permissions';
 import type { Settings, VaultTarget } from '@/lib/types';
 
 const fields: (keyof Settings)[] = [
@@ -69,13 +70,25 @@ function collectSettings(): Settings {
   return partial as Settings;
 }
 
+/** 在用户手势内申请一组端点 URL 对应的 host 权限；返回是否全部获批 */
+async function ensureEndpointAccess(urls: string[]): Promise<boolean> {
+  const origins = [...new Set(urls.map(originPattern).filter((o): o is string => o !== null))];
+  return requestOriginAccess(origins);
+}
+
+function resolveVaultUrl(s: Settings): string {
+  return (s.vaultTarget || 'official') === 'official' ? s.officialApiUrl : s.restApiUrl;
+}
+
 el('save').addEventListener('click', async () => {
   const btn = el<HTMLButtonElement>('save');
   const saved = el('saved');
   btn.disabled = true;
   try {
-    await saveSettings(collectSettings());
-    setStatus(saved, '✓ 设置已保存', 'ok');
+    const s = collectSettings();
+    const granted = await ensureEndpointAccess([resolveVaultUrl(s), s.llmBaseUrl]);
+    await saveSettings(s);
+    setStatus(saved, granted ? '✓ 设置已保存' : '✓ 已保存（部分端点未授权，剪藏时会提示重新授权）', granted ? 'ok' : 'err');
   } catch (error) {
     setStatus(saved, `保存失败：${error instanceof Error ? error.message : String(error)}`, 'err');
   } finally {
@@ -87,6 +100,7 @@ el('save').addEventListener('click', async () => {
 el('testAi').addEventListener('click', async () => {
   const status = el('aiStatus');
   setStatus(status, '测试中…', 'busy');
+  await ensureEndpointAccess([collectSettings().llmBaseUrl]);
   try {
     const result = await enrichClip({
       url: 'https://example.com/test',
@@ -115,6 +129,7 @@ async function testVault(target: VaultTarget) {
     return;
   }
 
+  await ensureEndpointAccess([base]);
   setStatus(status, '连接中…', 'busy');
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), 4000);
