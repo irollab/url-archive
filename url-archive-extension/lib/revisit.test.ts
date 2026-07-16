@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
+  affectsSavedClips,
   deleteSavedClip,
   getSavedClipStats,
   getBookmarkFolders,
@@ -7,6 +8,7 @@ import {
   pickRevisitClip,
   pickRevisitClips,
   recordRevisit,
+  SAVED_CLIPS_KEY,
   saveClipForRevisit,
   saveClipsForRevisit,
   searchSavedClips,
@@ -249,5 +251,19 @@ describe('revisit', () => {
     expect(stats.queued).toBe(1);
     expect(stats.unvisited).toBe(2);
     expect(stats.visited).toBe(1);
+  });
+});
+
+describe('affectsSavedClips', () => {
+  test('local 区剪藏键变化时返回 true', () => {
+    expect(affectsSavedClips({ [SAVED_CLIPS_KEY]: { newValue: [] } }, 'local')).toBe(true);
+  });
+
+  test('变化里不含剪藏键时返回 false', () => {
+    expect(affectsSavedClips({ url_archive_new_tab_prefs: { newValue: {} } }, 'local')).toBe(false);
+  });
+
+  test('非 local 存储区（如 sync）即便含剪藏键也返回 false', () => {
+    expect(affectsSavedClips({ [SAVED_CLIPS_KEY]: { newValue: [] } }, 'sync')).toBe(false);
   });
 });

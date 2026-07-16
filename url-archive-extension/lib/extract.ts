@@ -1,5 +1,6 @@
 import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
+import { gfm } from 'turndown-plugin-gfm';
 
 export interface ExtractResult {
   title: string;
@@ -36,6 +37,18 @@ export function extractArticle(doc: Document): ExtractResult {
   const article = new Readability(clone).parse();
 
   const turndown = new TurndownService({ headingStyle: 'atx' });
+  // GFM 插件补齐表格、删除线、任务列表（Turndown 默认不支持）
+  turndown.use(gfm);
+  // 丢弃无文字内容且不含图片的空锚点（如 GitHub 标题旁的永久链接图标），
+  // 否则会被转成 `[](url)` 污染正文
+  turndown.addRule('stripEmptyAnchor', {
+    filter: (node) =>
+      node.nodeName === 'A' &&
+      !!node.getAttribute('href') &&
+      node.textContent?.trim() === '' &&
+      !node.querySelector('img'),
+    replacement: () => '',
+  });
   const contentMarkdown = article?.content ? turndown.turndown(article.content) : '';
 
   return {

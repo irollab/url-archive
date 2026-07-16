@@ -43,12 +43,18 @@ export default defineBackground(() => {
     if (msg?.type === 'CAPTURE') {
       handleCapture(msg.why ?? '', queue)
         .then((r) => sendResponse({ ok: true, ...r }))
-        .catch((e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+        .catch((e) => sendResponse(captureErrorResponse(e)));
       return true; // 异步
     }
     if (msg?.type === 'CAPTURE_LAST_ACTIVE') {
       handleCaptureLastActive(msg.why ?? '', queue)
         .then((r) => sendResponse({ ok: true, ...r }))
+        .catch((e) => sendResponse(captureErrorResponse(e)));
+      return true;
+    }
+    if (msg?.type === 'GET_LAST_ACTIVE_ORIGIN') {
+      handleLastActiveOrigin()
+        .then((result) => sendResponse({ ok: true, ...result }))
         .catch((e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }));
       return true;
     }
@@ -134,6 +140,12 @@ export default defineBackground(() => {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+// 剪藏失败响应：缺 host 权限时回传具体 origin，供弹出页只申请缺失端点（而非全站）
+function captureErrorResponse(error: unknown) {
+  const base = { ok: false as const, error: getErrorMessage(error) };
+  return error instanceof MissingHostPermissionError ? { ...base, missingOrigin: error.origin } : base;
 }
 
 function canInjectIntoTab(url: string | undefined): boolean {
@@ -270,6 +282,18 @@ async function findMostRecentCapturableTab() {
   return tabs
     .filter((tab) => tab.id != null && canInjectIntoTab(tab.url))
     .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
+}
+
+async function handleLastActiveOrigin() {
+  const tab = await findMostRecentCapturableTab();
+  if (!tab?.url) {
+    throw new Error('没有找到可剪藏的最近网页：请先打开一个普通 http/https 页面');
+  }
+  const origin = originPattern(tab.url);
+  if (!origin) {
+    throw new Error('最近网页不支持剪藏：请使用普通 http/https 页面');
+  }
+  return { origin };
 }
 
 async function handleSaveNewTabPrefs(update: Partial<NewTabPrefs>) {

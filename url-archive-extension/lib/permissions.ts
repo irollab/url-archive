@@ -26,6 +26,11 @@ export async function requestOriginAccess(origins: string[]): Promise<boolean> {
   return chrome.permissions.request({ origins });
 }
 
+/** 申请读取标签页 URL/标题等元信息的权限，用于从新标签页定位最近可剪藏网页 */
+export async function requestTabsAccess(): Promise<boolean> {
+  return chrome.permissions.request({ permissions: ['tabs'] });
+}
+
 /** 后台调用端点前缺少对应 host 权限时抛出，供页面侧转成重新授权引导 */
 export class MissingHostPermissionError extends Error {
   constructor(readonly origin: string) {

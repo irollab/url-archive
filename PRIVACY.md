@@ -15,7 +15,7 @@ _最后更新 / Last updated: 2026-07-11_
 - 页面标题/URL/正文 → **你配置的 LLM 端点**，用于生成摘要与标签（未配置或关闭时不发送）。
 - 剪藏内容 → **你配置的 Obsidian 端点**（本地或你指定的地址）。
 - 站点图标通过浏览器本地的图标缓存（Chrome 的 _favicon 机制）显示，不向任何第三方发送页面域名。
-- 默认壁纸来自 Unsplash（可在设置中更换或使用自有图片）。
+- 默认壁纸随扩展本地打包；你也可以在设置中更换或使用自有图片。
 - **没有自有服务器、没有遥测或分析、不出售或共享你的数据。**
 
 ### 本地存储
@@ -50,7 +50,7 @@ _最后更新 / Last updated: 2026-07-11_
 - Page title/URL/body → **your configured LLM endpoint**, to generate summaries and tags (not sent if unconfigured or disabled).
 - Clipped content → **your configured Obsidian endpoint** (local or an address you specify).
 - Site icons are displayed using the browser's local favicon cache (Chrome's _favicon mechanism); no page domain is sent to any third party.
-- The default wallpaper is served by Unsplash (you may change it or use your own image).
+- The default wallpapers are bundled locally with the extension; you may change them or use your own image.
 - **No proprietary servers, no telemetry or analytics, and no selling or sharing of your data.**
 
 ### Local storage

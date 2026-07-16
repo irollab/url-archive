@@ -196,7 +196,10 @@ export default class UrlArchivePlugin extends Plugin {
 
     // 用 metadataCache 'changed'（frontmatter 解析完成后触发）而非 vault 'create'/'modify'，
     // 避免索引早于缓存导致新写入的笔记读不到 frontmatter 而漏索引。
-    this.registerEvent(this.app.metadataCache.on('changed', () => this.rebuildIndex()));
+    this.registerEvent(this.app.metadataCache.on('changed', async (file) => {
+      await this.rebuildIndex();
+      if (this.inArchiveFolder(file.path)) this.refreshPanelViews();
+    }));
     // 删除/重命名收藏时同步清理语义向量，避免面板「语义向量」数字残留孤儿向量
     this.registerEvent(this.app.vault.on('delete', (file) => this.onFileDeleted(file.path)));
     this.registerEvent(this.app.vault.on('rename', (file, oldPath) => this.onFileRenamed(file.path, oldPath)));
@@ -218,6 +221,14 @@ export default class UrlArchivePlugin extends Plugin {
     this.entries = entries.sort((a, b) => b.clipped.localeCompare(a.clipped));
   }
 
+  /** 数据变化后刷新所有已打开的面板视图，使「已索引收藏 / 语义向量」等统计实时反映最新数据 */
+  private refreshPanelViews(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(URL_ARCHIVE_VIEW_TYPE)) {
+      const view = leaf.view;
+      if (view instanceof UrlArchivePanelView) view.render();
+    }
+  }
+
   private inArchiveFolder(path: string): boolean {
     return path.startsWith(`${this.settings.archiveFolder.replace(/\/+$/, '')}/`);
   }
@@ -226,6 +237,7 @@ export default class UrlArchivePlugin extends Plugin {
   private async onFileDeleted(path: string): Promise<void> {
     await this.applyVectorChange(removeVectorForPath(this.semanticVectors, path));
     await this.rebuildIndex();
+    this.refreshPanelViews();
   }
 
   /** 重命名笔记：仍在收藏夹则改向量 path（保留向量），移出则删向量，再刷新索引 */
@@ -235,6 +247,7 @@ export default class UrlArchivePlugin extends Plugin {
       : removeVectorForPath(this.semanticVectors, oldPath);
     await this.applyVectorChange(next);
     await this.rebuildIndex();
+    this.refreshPanelViews();
   }
 
   /** 仅当向量数组引用变化时才持久化，避免删/改无关文件时无谓写盘 */
@@ -315,6 +328,7 @@ export default class UrlArchivePlugin extends Plugin {
     }
     // 直接解析写入内容并入索引（不等异步 metadataCache），确保实时剪藏立即可被“搜索收藏”命中
     const entry = this.indexEntryFromContent(normalized, content);
+    this.refreshPanelViews(); // 索引已即时更新，先刷新面板；向量在补全后会再刷新一次
     // 后台补该条语义向量，让语义搜索/问答也能立即命中（best-effort）
     if (entry) void this.embedClipEntry(entry);
   }
@@ -351,6 +365,7 @@ export default class UrlArchivePlugin extends Plugin {
         { path: entry.path, embedding, indexedAt: new Date().toISOString(), hash },
       ];
       await this.savePluginData();
+      this.refreshPanelViews(); // 向量补全后刷新面板，使「语义向量」计数实时更新
     } catch (error) {
       console.error('[URL Archive] 剪藏自动嵌入失败', error);
     }

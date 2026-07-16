@@ -1,6 +1,6 @@
 import { enrichStatusText } from '@/lib/enrich-status';
 import { mountReauthBanner } from '@/lib/reauth-banner';
-import { requestOriginAccess } from '@/lib/permissions';
+import { originPattern, requestOriginAccess } from '@/lib/permissions';
 
 const whyEl = document.getElementById('why') as HTMLTextAreaElement;
 const btn = document.getElementById('clip') as HTMLButtonElement;
@@ -83,7 +83,8 @@ let revisitFlashTimer: number | undefined;
 let scrollbarHideTimer: number | undefined;
 
 searchEl.focus();
-void mountReauthBanner(document.body);
+// 挂到带内边距的滚动容器而非 body：避免横幅圆角被 22px 圆角窗口裁切，也不挤压固定面板
+void mountReauthBanner(panelScrollEl);
 
 function showTransientScrollbar() {
   updateScrollbarOverlay();
@@ -563,8 +564,15 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 });
 
-// 缺 host 权限的错误（来自 background 的 MissingHostPermissionError.message）→ 提供一键重新授权
-function maybeOfferReauth(statusEl: HTMLElement, error: string) {
+// 当前活动标签页的 origin 模式（作为 missingOrigin 缺失时的兜底，仍是具体 origin 而非全站）
+async function currentTabOrigin(): Promise<string | null> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tab?.url ? originPattern(tab.url) : null;
+}
+
+// 缺 host 权限的错误（来自 background 的 MissingHostPermissionError）→ 提供一键重新授权。
+// 只申请后台回传的缺失 origin（兜底当前标签页 origin），避免申请全站 http/https 触发审核与用户敏感提示。
+function maybeOfferReauth(statusEl: HTMLElement, error: string, missingOrigin?: string) {
   if (!error.includes('重新授权')) return;
   const reauthBtn = document.createElement('button');
   reauthBtn.type = 'button';
@@ -572,7 +580,13 @@ function maybeOfferReauth(statusEl: HTMLElement, error: string) {
   reauthBtn.textContent = '重新授权';
   reauthBtn.addEventListener('click', async () => {
     reauthBtn.disabled = true;
-    const ok = await requestOriginAccess(['http://*/*', 'https://*/*']);
+    const origin = missingOrigin ?? (await currentTabOrigin());
+    if (!origin) {
+      reauthBtn.textContent = '无法确定要授权的站点';
+      reauthBtn.disabled = false;
+      return;
+    }
+    const ok = await requestOriginAccess([origin]);
     reauthBtn.textContent = ok ? '已授权，请重试剪藏' : '授权被拒绝';
   });
   statusEl.appendChild(reauthBtn);
@@ -592,7 +606,7 @@ btn.addEventListener('click', async () => {
   } else {
     statusEl.textContent = `✗ 失败：${res?.error ?? '未知错误'}`;
     btn.disabled = false;
-    maybeOfferReauth(statusEl, res?.error ?? '');
+    void maybeOfferReauth(statusEl, res?.error ?? '', res?.missingOrigin);
   }
 });
 

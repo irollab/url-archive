@@ -6,7 +6,7 @@
 
 :root {
   color-scheme: light dark;
-  --wallpaper-image: url("https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=80");
+  --wallpaper-image: url("/wallpaper/wallpaper-1.jpg");
   --wallpaper-blur: 0px;
   --wallpaper-mask: .58;
   --text: #f8fbff;

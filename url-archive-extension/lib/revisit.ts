@@ -3,6 +3,17 @@ import type { SavedClip } from './types';
 const KEY = 'saved_clips';
 const MAX_SAVED_CLIPS = 1000;
 
+/** 剪藏列表在 chrome.storage.local 中的键，供订阅存储变化时判别用 */
+export const SAVED_CLIPS_KEY = KEY;
+
+/** 判断一次 storage.onChanged 是否涉及剪藏列表（仅 local 区）；用于新标签页在后台剪藏后自动刷新 */
+export function affectsSavedClips(
+  changes: Record<string, unknown>,
+  areaName: string,
+): boolean {
+  return areaName === 'local' && SAVED_CLIPS_KEY in changes;
+}
+
 export type ClipFilter = 'all' | 'clip' | 'bookmark' | 'queued' | 'unvisited' | 'visited';
 
 export interface SearchSavedClipsOptions {

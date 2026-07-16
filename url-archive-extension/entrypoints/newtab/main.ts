@@ -10,7 +10,8 @@ import {
 } from '@/lib/image-store';
 import { attachImageLightbox } from '@/lib/lightbox';
 import { mountReauthBanner } from '@/lib/reauth-banner';
-import { requestOriginAccess } from '@/lib/permissions';
+import { requestOriginAccess, requestTabsAccess } from '@/lib/permissions';
+import { affectsSavedClips } from '@/lib/revisit';
 import { DomeGallery, type DomeItem } from './dome-gallery';
 
 const appEl = document.getElementById('app') as HTMLElement;
@@ -219,18 +220,22 @@ const DEFAULT_PREFS: Prefs = {
   searchEngineId: 'google',
 };
 
-const DEFAULT_BACKGROUND_IMAGE = 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=80';
+// 内置壁纸打包在扩展 public/wallpaper 下，默认无远程请求（隐私/审核友好）；
+// 用绝对路径（不含扩展 id）便于持久化到 prefs 且开发/发布环境通用。
+const DEFAULT_BACKGROUND_IMAGE = '/wallpaper/wallpaper-1.jpg';
 const BUILT_IN_WALLPAPERS = [
   DEFAULT_BACKGROUND_IMAGE,
-  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2400&q=80',
-  'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=2400&q=80',
-  'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=2400&q=80',
-  'https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=2400&q=80',
+  '/wallpaper/wallpaper-2.jpg',
+  '/wallpaper/wallpaper-3.jpg',
+  '/wallpaper/wallpaper-4.jpg',
+  '/wallpaper/wallpaper-5.jpg',
 ];
 const PREVIEW_PREFS_KEY = 'url_archive_preview_new_tab_prefs';
 
 let prefs: Prefs = DEFAULT_PREFS;
 let dashboardData: DashboardData | null = null;
+// 已解析图标后的最近一次数据：用于画廊/网格纯视图切换时的同步重渲染（避免异步刷新期间闪现旧内容）
+let lastResolvedData: DashboardData | null = null;
 let currentFolder = '';
 let editingCard: DashboardCard | null = null;
 let currentPage = 0;
@@ -249,6 +254,7 @@ let revisitCards: DashboardCard[] = [];
 let revisitIndex = 0;
 let revisitRotateTimer: number | undefined;
 let revisitFlashTimer: number | undefined;
+let clipsRefreshTimer: number | undefined;
 
 const PREVIEW_CARDS: DashboardCard[] = [
   previewCard('https://app.tapnow.ai', 'TapNow | 你的智能体创意画布', 'app.tapnow.ai', '书签栏 / AI绘画', 'bookmark', ['AI', '创意'], '智能体创意画布和视觉工作台'),
@@ -311,6 +317,7 @@ async function refreshDashboard() {
 
     dashboardData = res.data;
     const resolvedData = await resolveDashboardImages(res.data);
+    lastResolvedData = resolvedData;
     renderDashboard(resolvedData, query, folder);
     setStatus(statusText(resolvedData, query, folder));
   } catch (error) {
@@ -341,9 +348,22 @@ async function resolveDashboardCardImage(card: DashboardCard): Promise<Dashboard
   return resolved ? { ...card, faviconUrl: resolved } : card;
 }
 
+/** 画廊模式是否实际生效：首启无书签（且未搜索）时回退网格，以复用其「导入书签」引导卡 */
+function shouldShowGallery(): boolean {
+  if (!prefs.galleryMode) return false;
+  if (!dashboardData) return true; // 收藏数据未知时先按偏好显示，避免加载期闪烁
+  const total = dashboardData.stats.total ?? 0;
+  const hasQuery = searchInputEl.value.trim() !== '';
+  return total > 0 || hasQuery;
+}
+
 function renderDashboard(data: DashboardData, query: string, folder: string) {
   renderCategories(data.folders);
-  if (prefs.galleryMode) {
+  // 无书签的首启态即便偏好画廊模式也回退网格，露出「导入书签」引导卡
+  const galleryOn = shouldShowGallery();
+  appEl.classList.toggle('gallery-mode', galleryOn);
+  domeGalleryEl.hidden = !galleryOn;
+  if (galleryOn) {
     renderDome(data.cards);
   } else {
     renderCards(data.cards, query);
@@ -1072,11 +1092,6 @@ function bindEvents() {
   }
 
   clipCurrentEl.addEventListener('click', async () => {
-    const granted = await requestOriginAccess(['http://*/*', 'https://*/*']);
-    if (!granted) {
-      setStatus('已跳过：可在目标网页用扩展图标「剪藏本页」。');
-      return;
-    }
     captureRecentPage();
   });
 
@@ -1096,6 +1111,16 @@ function bindEvents() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') startRevisitRotation();
     else stopRevisitRotation();
+  });
+
+  // 后台在别处剪藏/补 AI/导入书签时会写入剪藏存储，已打开的新标签页据此自动刷新，
+  // 无需重开页面即可让「最近剪藏」等区块更新；防抖以合并两阶段剪藏的连续写入
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (!affectsSavedClips(changes, areaName)) return;
+    window.clearTimeout(clipsRefreshTimer);
+    clipsRefreshTimer = window.setTimeout(() => {
+      refreshDashboard();
+    }, 250);
   });
 
   aiRecallEl.addEventListener('click', () => {
@@ -1179,7 +1204,12 @@ function bindEvents() {
   galleryModeInputEl.addEventListener('change', () => {
     currentPage = 0;
     savePrefs({ galleryMode: galleryModeInputEl.checked });
-    refreshDashboard();
+    // 纯视图切换、数据未变：用缓存同步重渲染，避免异步刷新期间露出旧 cardsEl 内容（导入引导闪现）
+    if (lastResolvedData) {
+      renderDashboard(lastResolvedData, searchInputEl.value, currentFolder);
+    } else {
+      refreshDashboard();
+    }
   });
 
   searchBoxVisibleInputEl.addEventListener('change', () => {
@@ -1333,10 +1363,10 @@ async function applyPrefs() {
   appEl.style.setProperty('--page-font-size', `${prefs.fontSize}px`);
   appEl.classList.toggle('hide-labels', !prefs.showLabels);
   appEl.classList.toggle('hide-search-box', !prefs.searchBoxVisible);
-  appEl.classList.toggle('gallery-mode', prefs.galleryMode);
+  appEl.classList.toggle('gallery-mode', shouldShowGallery());
   appEl.classList.toggle('font-shadow', prefs.fontShadow);
   appEl.classList.toggle('icon-glow', prefs.iconGlow);
-  domeGalleryEl.hidden = !prefs.galleryMode;
+  domeGalleryEl.hidden = !shouldShowGallery();
 
   gridColumnsInputEl.value = String(prefs.gridColumns);
   gridColumnsValueEl.value = String(prefs.gridColumns);
@@ -1562,6 +1592,26 @@ async function captureRecentPage() {
   setStatus('正在剪藏最近浏览的网页...');
 
   try {
+    const canReadTabs = await requestTabsAccess();
+    if (!canReadTabs) {
+      setStatus('已跳过：可在目标网页用扩展图标「剪藏本页」。');
+      return;
+    }
+
+    const target = await sendRuntimeMessage({
+      type: 'GET_LAST_ACTIVE_ORIGIN',
+    }) as RuntimeResponse<{ origin?: string }>;
+
+    if (!target?.ok || !target.origin) {
+      throw new Error(target?.error ?? '没有找到可剪藏的最近网页');
+    }
+
+    const granted = await requestOriginAccess([target.origin]);
+    if (!granted) {
+      setStatus('已跳过：可在目标网页用扩展图标「剪藏本页」。');
+      return;
+    }
+
     const res = await sendRuntimeMessage({
       type: 'CAPTURE_LAST_ACTIVE',
       why: '',
@@ -1676,6 +1726,9 @@ async function previewRuntimeMessage(message: Record<string, unknown>): Promise<
   }
   if (type === 'CAPTURE_LAST_ACTIVE') {
     return { ok: true, queued: false, path: 'preview/current-page.md' };
+  }
+  if (type === 'GET_LAST_ACTIVE_ORIGIN') {
+    return { ok: true, origin: 'https://example.com/*' };
   }
   if (type === 'IMPORT_BROWSER_BOOKMARKS') {
     return { ok: true, imported: PREVIEW_CARDS.length, total: PREVIEW_CARDS.length };

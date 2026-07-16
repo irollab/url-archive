@@ -24,6 +24,7 @@ export default defineConfig({
     permissions: ['activeTab', 'scripting', 'storage', 'bookmarks', 'favicon'],
     // 广域 host 改为运行时按需申请：默认不授予，向用户自配的 Obsidian/LLM 端点或后台标签页剪藏时再申请
     host_permissions: [],
+    optional_permissions: ['tabs'],
     optional_host_permissions: ['http://*/*', 'https://*/*'],
     action: { default_title: '剪藏到 Obsidian' },
     chrome_url_overrides: {
